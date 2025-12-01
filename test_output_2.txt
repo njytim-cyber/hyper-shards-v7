@@ -1,0 +1,85 @@
+
+Running 3 tests using 3 workers
+
+BROWSER LOG: [vite] connecting...
+BROWSER LOG: [vite] connected.
+BROWSER LOG: [vite] connecting...
+BROWSER LOG: [vite] connected.
+BROWSER LOG: [vite] connecting...
+BROWSER LOG: [vite] connected.
+BROWSER LOG: %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+BROWSER LOG: %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+BROWSER LOG: %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+BROWSER LOG: The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. https://developer.chrome.com/blog/autoplay/#web_audio
+BROWSER LOG: The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. https://developer.chrome.com/blog/autoplay/#web_audio
+BROWSER LOG: The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. https://developer.chrome.com/blog/autoplay/#web_audio
+  ✓  1 [chromium] › tests\e2e\verify_issues.spec.ts:67:5 › Game Issues - Paranoid Mode › Tutorial should be present (12.0s)
+  ✘  2 [chromium] › tests\e2e\verify_issues.spec.ts:83:5 › Game Issues - Paranoid Mode › Wave 1 should appear only after tutorial (9.5s)
+  ✘  3 [chromium] › tests\e2e\verify_issues.spec.ts:25:5 › Game Issues - Paranoid Mode › Pause Screen should lead to Shop (1.9s)
+
+
+  1) [chromium] › tests\e2e\verify_issues.spec.ts:25:5 › Game Issues - Paranoid Mode › Pause Screen should lead to Shop 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: locator('#pause-btn-hud').or(locator('#mobile-pause-btn'))
+    Expected: visible
+    Error: strict mode violation: locator('#pause-btn-hud').or(locator('#mobile-pause-btn')) resolved to 2 elements:
+        1) <button class="hud-btn" id="pause-btn-hud">…</button> aka getByRole('button', { name: 'PAUSE (P)' })
+        2) <button id="mobile-pause-btn">PAUSE</button> aka locator('#mobile-pause-btn')
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for locator('#pause-btn-hud').or(locator('#mobile-pause-btn'))[22m
+
+
+      39 |         // Handle both desktop and mobile pause buttons
+      40 |         const pauseBtn = page.locator('#pause-btn-hud').or(page.locator('#mobile-pause-btn'));
+    > 41 |         await expect(pauseBtn).toBeVisible();
+         |                                ^
+      42 |         await pauseBtn.click();
+      43 |
+      44 |         // Wait for pause screen
+        at C:\Users\njyti\Desktop\Google-Antigravity\hyper-shards-v7\tests\e2e\verify_issues.spec.ts:41:32
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\verify_issues-Game-Issues--744c5--Screen-should-lead-to-Shop-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\verify_issues-Game-Issues--744c5--Screen-should-lead-to-Shop-chromium\error-context.md
+
+  2) [chromium] › tests\e2e\verify_issues.spec.ts:83:5 › Game Issues - Paranoid Mode › Wave 1 should appear only after tutorial 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeHidden[2m([22m[2m)[22m failed
+
+    Locator:  locator('#level-title')
+    Expected: hidden
+    Received: visible
+    Timeout:  5000ms
+
+    Call log:
+    [2m  - Expect "toBeHidden" with timeout 5000ms[22m
+    [2m  - waiting for locator('#level-title')[22m
+    [2m    7 × locator resolved to <div id="level-title" class="cyan-glow">WAVE 1</div>[22m
+    [2m      - unexpected value "visible"[22m
+
+
+      106 |
+      107 |         const levelTitle = page.locator('#level-title');
+    > 108 |         await expect(levelTitle).toBeHidden();
+          |                                  ^
+      109 |
+      110 |         // 2. Complete Tutorial programmatically
+      111 |         const success = await page.evaluate(() => {
+        at C:\Users\njyti\Desktop\Google-Antigravity\hyper-shards-v7\tests\e2e\verify_issues.spec.ts:108:34
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\verify_issues-Game-Issues--93566--appear-only-after-tutorial-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\verify_issues-Game-Issues--93566--appear-only-after-tutorial-chromium\error-context.md
+
+  2 failed
+    [chromium] › tests\e2e\verify_issues.spec.ts:25:5 › Game Issues - Paranoid Mode › Pause Screen should lead to Shop 
+    [chromium] › tests\e2e\verify_issues.spec.ts:83:5 › Game Issues - Paranoid Mode › Wave 1 should appear only after tutorial 
+  1 passed (15.6s)

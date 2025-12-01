@@ -1,0 +1,50 @@
+
+Running 9 tests using 4 workers
+
+BROWSER LOG: [vite] connecting...
+BROWSER LOG: [vite] connected.
+BROWSER LOG: [vite] connecting...
+BROWSER LOG: [vite] connected.
+BROWSER LOG: [vite] connecting...
+BROWSER LOG: [vite] connected.
+BROWSER LOG: %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+BROWSER LOG: %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+BROWSER LOG: %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+BROWSER LOG: The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. https://developer.chrome.com/blog/autoplay/#web_audio
+BROWSER LOG: The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. https://developer.chrome.com/blog/autoplay/#web_audio
+BROWSER LOG: [vite] connecting...
+BROWSER LOG: The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. https://developer.chrome.com/blog/autoplay/#web_audio
+BROWSER LOG: [vite] connected.
+BROWSER LOG: AudioContext not supported
+BROWSER LOG: AudioContext not supported
+  ✓  3 [chromium] › tests\e2e\verify_issues.spec.ts:68:5 › Game Issues - Paranoid Mode › Tutorial should be present (2.4s)
+  ✓  4 [chromium] › tests\e2e\verify_issues.spec.ts:84:5 › Game Issues - Paranoid Mode › Wave 1 should appear only after tutorial (2.6s)
+  ✓  1 [chromium] › tests\e2e\verify_issues.spec.ts:25:5 › Game Issues - Paranoid Mode › Pause Screen should lead to Shop (3.8s)
+BROWSER LOG: [vite] connecting...
+BROWSER LOG: [vite] connecting...
+BROWSER LOG: [vite] connected.
+BROWSER LOG: [vite] connected.
+BROWSER LOG: AudioContext not supported
+BROWSER LOG: AudioContext not supported
+BROWSER LOG: [vite] connecting...
+BROWSER LOG: [vite] connected.
+BROWSER LOG: AudioContext not supported
+BROWSER LOG: AudioContext not supported
+BROWSER LOG: %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+BROWSER LOG: The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. https://developer.chrome.com/blog/autoplay/#web_audio
+  ✓  2 [iphone] › tests\e2e\verify_issues.spec.ts:25:5 › Game Issues - Paranoid Mode › Pause Screen should lead to Shop (8.2s)
+  ✓  7 [android] › tests\e2e\verify_issues.spec.ts:25:5 › Game Issues - Paranoid Mode › Pause Screen should lead to Shop (3.0s)
+  ✓  6 [iphone] › tests\e2e\verify_issues.spec.ts:68:5 › Game Issues - Paranoid Mode › Tutorial should be present (4.6s)
+  ✓  5 [iphone] › tests\e2e\verify_issues.spec.ts:84:5 › Game Issues - Paranoid Mode › Wave 1 should appear only after tutorial (5.0s)
+BROWSER LOG: [vite] connecting...
+BROWSER LOG: [vite] connected.
+BROWSER LOG: %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+BROWSER LOG: The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. https://developer.chrome.com/blog/autoplay/#web_audio
+BROWSER LOG: [vite] connecting...
+BROWSER LOG: [vite] connected.
+BROWSER LOG: %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+BROWSER LOG: The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. https://developer.chrome.com/blog/autoplay/#web_audio
+  ✓  8 [android] › tests\e2e\verify_issues.spec.ts:84:5 › Game Issues - Paranoid Mode › Wave 1 should appear only after tutorial (1.8s)
+  ✓  9 [android] › tests\e2e\verify_issues.spec.ts:68:5 › Game Issues - Paranoid Mode › Tutorial should be present (1.4s)
+
+  9 passed (13.1s)

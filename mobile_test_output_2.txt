@@ -1,0 +1,135 @@
+
+Running 3 tests using 3 workers
+
+BROWSER LOG: [vite] connecting...
+BROWSER LOG: [vite] connecting...
+BROWSER LOG: [vite] connecting...
+BROWSER LOG: [vite] connected.
+BROWSER LOG: [vite] connected.
+BROWSER LOG: [vite] connected.
+PAGE ERROR: TypeError: undefined is not a constructor (evaluating 'new AC()')
+BROWSER LOG: %s
+
+%s
+ An error occurred in the <App> component. Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+PAGE ERROR: TypeError: undefined is not a constructor (evaluating 'new AC()')
+BROWSER LOG: %s
+
+%s
+ An error occurred in the <App> component. Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+PAGE ERROR: TypeError: undefined is not a constructor (evaluating 'new AC()')
+BROWSER LOG: %s
+
+%s
+ An error occurred in the <App> component. Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+PAGE ERROR: TypeError: undefined is not a constructor (evaluating 'new AC()')
+BROWSER LOG: %s
+
+%s
+ An error occurred in the <App> component. Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+PAGE ERROR: TypeError: undefined is not a constructor (evaluating 'new AC()')
+BROWSER LOG: %s
+
+%s
+ An error occurred in the <App> component. Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+PAGE ERROR: TypeError: undefined is not a constructor (evaluating 'new AC()')
+BROWSER LOG: %s
+
+%s
+ An error occurred in the <App> component. Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+  ✘  2 [iphone] › tests\e2e\verify_issues.spec.ts:68:5 › Game Issues - Paranoid Mode › Tutorial should be present (12.1s)
+  ✘  3 [iphone] › tests\e2e\verify_issues.spec.ts:25:5 › Game Issues - Paranoid Mode › Pause Screen should lead to Shop (12.2s)
+  ✘  1 [iphone] › tests\e2e\verify_issues.spec.ts:84:5 › Game Issues - Paranoid Mode › Wave 1 should appear only after tutorial (12.2s)
+
+
+  1) [iphone] › tests\e2e\verify_issues.spec.ts:25:5 › Game Issues - Paranoid Mode › Pause Screen should lead to Shop 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: locator('#start-screen')
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 10000ms[22m
+    [2m  - waiting for locator('#start-screen')[22m
+
+
+      17 |         // Rule 1: Hydration Wait - wait for start screen (actual rendered content)
+      18 |         const startScreen = page.locator('#start-screen');
+    > 19 |         await expect(startScreen).toBeVisible({ timeout: 10000 });
+         |                                   ^
+      20 |
+      21 |         // Wait for game engine to be attached to window AND initialized (canvas set)
+      22 |         await page.waitForFunction(() => (window as any).gameEngine && (window as any).gameEngine.canvas);
+        at C:\Users\njyti\Desktop\Google-Antigravity\hyper-shards-v7\tests\e2e\verify_issues.spec.ts:19:35
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\verify_issues-Game-Issues--744c5--Screen-should-lead-to-Shop-iphone\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [iphone] › tests\e2e\verify_issues.spec.ts:68:5 › Game Issues - Paranoid Mode › Tutorial should be present 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: locator('#start-screen')
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 10000ms[22m
+    [2m  - waiting for locator('#start-screen')[22m
+
+
+      17 |         // Rule 1: Hydration Wait - wait for start screen (actual rendered content)
+      18 |         const startScreen = page.locator('#start-screen');
+    > 19 |         await expect(startScreen).toBeVisible({ timeout: 10000 });
+         |                                   ^
+      20 |
+      21 |         // Wait for game engine to be attached to window AND initialized (canvas set)
+      22 |         await page.waitForFunction(() => (window as any).gameEngine && (window as any).gameEngine.canvas);
+        at C:\Users\njyti\Desktop\Google-Antigravity\hyper-shards-v7\tests\e2e\verify_issues.spec.ts:19:35
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\verify_issues-Game-Issues--bf839--Tutorial-should-be-present-iphone\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) [iphone] › tests\e2e\verify_issues.spec.ts:84:5 › Game Issues - Paranoid Mode › Wave 1 should appear only after tutorial 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: locator('#start-screen')
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 10000ms[22m
+    [2m  - waiting for locator('#start-screen')[22m
+
+
+      17 |         // Rule 1: Hydration Wait - wait for start screen (actual rendered content)
+      18 |         const startScreen = page.locator('#start-screen');
+    > 19 |         await expect(startScreen).toBeVisible({ timeout: 10000 });
+         |                                   ^
+      20 |
+      21 |         // Wait for game engine to be attached to window AND initialized (canvas set)
+      22 |         await page.waitForFunction(() => (window as any).gameEngine && (window as any).gameEngine.canvas);
+        at C:\Users\njyti\Desktop\Google-Antigravity\hyper-shards-v7\tests\e2e\verify_issues.spec.ts:19:35
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\verify_issues-Game-Issues--93566--appear-only-after-tutorial-iphone\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3 failed
+    [iphone] › tests\e2e\verify_issues.spec.ts:25:5 › Game Issues - Paranoid Mode › Pause Screen should lead to Shop 
+    [iphone] › tests\e2e\verify_issues.spec.ts:68:5 › Game Issues - Paranoid Mode › Tutorial should be present 
+    [iphone] › tests\e2e\verify_issues.spec.ts:84:5 › Game Issues - Paranoid Mode › Wave 1 should appear only after tutorial 

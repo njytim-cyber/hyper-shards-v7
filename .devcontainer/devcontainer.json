@@ -1,0 +1,21 @@
+{
+  "name": "Node.js & TypeScript",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:20",
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "snyk-security.vscode-snyk"
+      ]
+    }
+  },
+  "forwardPorts": [
+    5173,
+    9323
+  ],
+  "postCreateCommand": "npm install && npx playwright install-deps"
+}
