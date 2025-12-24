@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/ban-ts-comment, @typescript-eslint/no-unused-vars */
 import { test, expect } from '@playwright/test';
 
 test.describe('Game Issues - Paranoid Mode', () => {

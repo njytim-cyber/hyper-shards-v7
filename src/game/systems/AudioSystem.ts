@@ -1,3 +1,10 @@
+// Extend Window interface for webkit prefix
+declare global {
+    interface Window {
+        webkitAudioContext: typeof AudioContext;
+    }
+}
+
 export class AudioSystem {
     private ctx: AudioContext | null = null;
     private masterGain: GainNode | null = null;
@@ -22,7 +29,7 @@ export class AudioSystem {
     public init() {
         if (this.initialized) return;
 
-        const AC = window.AudioContext || (window as any).webkitAudioContext;
+        const AC = window.AudioContext || window.webkitAudioContext;
         if (!AC) {
             console.warn('AudioContext not supported');
             return;

@@ -4,19 +4,54 @@ import { StartScreen } from './components/screens/StartScreen';
 import { GameOverScreen } from './components/screens/GameOverScreen';
 import { PauseScreen } from './components/screens/PauseScreen';
 import { ShopScreen } from './components/screens/ShopScreen';
-import { gameEngine } from './game/core/GameEngine';
-import { persistence } from './game/systems/Persistence';
-import { audioSystem } from './game/systems/AudioSystem';
+import { IntroScreen } from './components/screens/IntroScreen';
+import { AchievementsScreen } from './components/screens/AchievementsScreen';
+import { DailyRewardsPopup } from './components/screens/DailyRewardsPopup';
+import { PilotSelectScreen } from './components/screens/PilotSelectScreen';
+import { gameEngine, GameEngine } from './game/core/GameEngine';
+import { persistence, Persistence } from './game/systems/Persistence';
+import { audioSystem, AudioSystem } from './game/systems/AudioSystem';
+import { canClaimDailyReward } from './game/config/DailyRewardsConfig';
 import { CanvasView } from './views/CanvasView';
 import { ParticleContainer } from './components/containers/ParticleContainer';
 import { PlayerContainer } from './components/containers/PlayerContainer';
 import { Icons } from './components/ui/Icons';
+import { DialogueDisplay } from './components/ui/DialogueDisplay';
 
-// Import SVG icons
 import './styles/index.css';
 
+// Extend Window interface for game globals
+declare global {
+  interface Window {
+    gameEngine: GameEngine;
+    persistence: Persistence;
+    audioSystem: AudioSystem;
+  }
+}
+
+type GameStateType = 'INTRO' | 'START' | 'PLAYING' | 'PAUSED' | 'GAMEOVER' | 'VICTORY' | 'SHOP' | 'ACHIEVEMENTS' | 'PILOTS';
+
+// Module-level flag for one-time initialization (avoids refs-during-render lint error)
+let persistenceLoaded = false;
+function ensurePersistenceLoaded(): void {
+  if (!persistenceLoaded) {
+    persistence.load();
+    persistenceLoaded = true;
+  }
+}
+
+function getInitialHighScore(): number {
+  ensurePersistenceLoaded();
+  return persistence.profile.highScore;
+}
+
+function getInitialGameState(): GameStateType {
+  ensurePersistenceLoaded();
+  return persistence.profile.hasSeenIntro ? 'START' : 'INTRO';
+}
+
 function App() {
-  const [gameState, setGameState] = useState<'START' | 'PLAYING' | 'PAUSED' | 'GAMEOVER' | 'SHOP'>('START');
+  const [gameState, setGameState] = useState<GameStateType>(getInitialGameState);
   const [hudState, setHudState] = useState({
     lives: 3,
     shields: 0,
@@ -25,22 +60,23 @@ function App() {
     showWave: false
   });
   const [levelText, setLevelText] = useState({ show: false, wave: 1, sub: '', hint: '', isBoss: false });
-  const [highScore, setHighScore] = useState(0);
+  const [highScore, setHighScore] = useState(getInitialHighScore);
   const [isNewHighScore, setIsNewHighScore] = useState(false);
+  const [showDailyRewards, setShowDailyRewards] = useState(false);
+  const [previousState, setPreviousState] = useState<GameStateType>('START');
+  const [preShopTrack, setPreShopTrack] = useState<string | null>(null);
 
   useEffect(() => {
-    persistence.load();
-    setHighScore(persistence.profile.highScore);
-    // Shards are read directly in HUD now, or we can keep passing them if they don't update often.
-    // Actually HUD reads shards from props in my previous edit. Let's keep passing shards via prop for now, 
-    // but we need to trigger re-render when they change (e.g. shop).
-    // Wait, HUD refactor kept 'shards' as prop.
+    // Check for daily rewards
+    if (canClaimDailyReward(persistence.profile.dailyRewards)) {
+      setTimeout(() => setShowDailyRewards(true), 500);
+    }
   }, []);
 
-  // ... (SVG injection omitted for brevity, assuming it's unchanged or handled by previous context)
-
-  const [previousState, setPreviousState] = useState<'START' | 'PLAYING' | 'PAUSED' | 'GAMEOVER' | 'SHOP'>('START');
-  const [preShopTrack, setPreShopTrack] = useState<string | null>(null);
+  const handleIntroComplete = () => {
+    setGameState('START');
+    audioSystem.playMusic('load');
+  };
 
   const handleStart = () => {
     setGameState('PLAYING');
@@ -68,19 +104,39 @@ function App() {
     }
   };
 
-  // Canvas initialization is now handled by CanvasView callback
+  const handleOpenAchievements = () => {
+    setPreviousState(gameState);
+    setGameState('ACHIEVEMENTS');
+  };
 
-  // Ref for GameEngine init
+  const handleCloseAchievements = () => {
+    setGameState(previousState);
+  };
+
+  const handleOpenPilots = () => {
+    setPreviousState(gameState);
+    setGameState('PILOTS');
+  };
+
+  const handleClosePilots = () => {
+    setGameState(previousState);
+  };
+
+  const handlePilotSelect = () => {
+    setGameState(previousState);
+  };
+
+  const handleDailyRewardClaim = () => {
+    // Could show a nice animation here
+  };
+
   const handleCanvasReady = (canvas: HTMLCanvasElement) => {
-    (window as any).gameEngine = gameEngine;
-    (window as any).persistence = persistence;
-    (window as any).audioSystem = audioSystem;
-    // Note: GameEngine currently expects to call getContext('2d') itself.
-    // If CanvasView locked it to WebGPU, this will fail.
-    // For this phase, we ensure CanvasView *can* do WebGPU but we let GameEngine do its thing for now
-    // unless we are fully switching.
+    window.gameEngine = gameEngine;
+    window.persistence = persistence;
+    window.audioSystem = audioSystem;
+
     gameEngine.init(canvas, {
-      onScoreUpdate: (_score) => { /* No-op */ },
+      onScoreUpdate: () => { /* No-op */ },
       onWaveUpdate: (wave, sub, hint, boss) => {
         const isTutorial = sub === "TUTORIAL";
         setHudState(prev => ({ ...prev, wave, showWave: !isTutorial }));
@@ -91,11 +147,18 @@ function App() {
       },
       onLivesUpdate: (lives, shields) => setHudState(prev => ({ ...prev, lives, shields })),
       onWeaponUpdate: (weapon) => setHudState(prev => ({ ...prev, weapon })),
-      onComboUpdate: (_combo, _val) => { /* No-op */ },
-      onGameOver: (score, highScore, newHigh) => {
+      onComboUpdate: () => { /* No-op */ },
+      onGameOver: (_, hs, newHigh) => {
         setGameState('GAMEOVER');
-        setHighScore(highScore);
+        setHighScore(hs);
         setIsNewHighScore(newHigh);
+        persistence.trackStat('totalGamesPlayed', 1);
+      },
+      onVictory: (score, hs) => {
+        setGameState('VICTORY');
+        setHighScore(hs);
+        setIsNewHighScore(score > hs);
+        persistence.trackStat('totalGamesPlayed', 1);
       },
       onGameStart: () => setGameState('PLAYING'),
       onPause: (isPaused) => setGameState(isPaused ? 'PAUSED' : 'PLAYING')
@@ -109,6 +172,10 @@ function App() {
       <ParticleContainer />
       <CanvasView onCanvasReady={handleCanvasReady} />
 
+      {gameState === 'INTRO' && (
+        <IntroScreen onComplete={handleIntroComplete} onSkip={handleIntroComplete} />
+      )}
+
       {gameState === 'PLAYING' && (
         <HUD
           lives={hudState.lives}
@@ -121,10 +188,50 @@ function App() {
         />
       )}
 
-      {gameState === 'START' && <StartScreen onStart={handleStart} onOpenShop={handleOpenShop} highScore={highScore} />}
-      {gameState === 'GAMEOVER' && <GameOverScreen score={gameEngine.score} highScore={highScore} isNewHighScore={isNewHighScore} onRestart={handleStart} onOpenShop={handleOpenShop} />}
-      {gameState === 'PAUSED' && <PauseScreen onResume={handlePause} onOpenShop={handleOpenShop} />}
+      {gameState === 'START' && (
+        <StartScreen
+          onStart={handleStart}
+          onOpenShop={handleOpenShop}
+          onOpenAchievements={handleOpenAchievements}
+          onOpenPilots={handleOpenPilots}
+          highScore={highScore}
+        />
+      )}
+
+      {(gameState === 'GAMEOVER' || gameState === 'VICTORY') && (
+        <GameOverScreen
+          score={gameEngine.score}
+          highScore={highScore}
+          isNewHighScore={isNewHighScore}
+          isVictory={gameState === 'VICTORY'}
+          onRestart={handleStart}
+          onOpenShop={handleOpenShop}
+        />
+      )}
+
+      {gameState === 'PAUSED' && (
+        <PauseScreen onResume={handlePause} onOpenShop={handleOpenShop} />
+      )}
+
       {gameState === 'SHOP' && <ShopScreen onClose={handleCloseShop} />}
+
+      {gameState === 'ACHIEVEMENTS' && (
+        <AchievementsScreen onClose={handleCloseAchievements} />
+      )}
+
+      {gameState === 'PILOTS' && (
+        <PilotSelectScreen onClose={handleClosePilots} onSelect={handlePilotSelect} />
+      )}
+
+      {showDailyRewards && (
+        <DailyRewardsPopup
+          onClose={() => setShowDailyRewards(false)}
+          onClaim={handleDailyRewardClaim}
+        />
+      )}
+
+      {/* Pilot Dialogue Display */}
+      <DialogueDisplay />
 
       {/* Tutorial Layer */}
       <div id="tutorial-layer"></div>

@@ -9,7 +9,7 @@ export const PlayerContainer: React.FC = () => {
         // Initialize Bridge
         const bridge = new WebTransportBridge({
             url: 'https://localhost:4433/hyper-shards', // Example URL
-            onDatagramReceived: (data) => {
+            onDatagramReceived: () => {
                 // Handle incoming position updates from other players
                 // For now, we just log it or decode it
                 // const view = new DataView(data.buffer);

@@ -1,4 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { test, expect } from '@playwright/test';
+import type { Page } from '@playwright/test';
 
 test.describe('Comprehensive Shop Verification', () => {
 
@@ -9,15 +11,15 @@ test.describe('Comprehensive Shop Verification', () => {
     });
 
     // Helper to set upgrade
-    const setUpgrade = async (page: any, key: string, val: number) => {
-        await page.evaluate(({ k, v }) => {
+    const setUpgrade = async (page: Page, key: string, val: number) => {
+        await page.evaluate(({ k, v }: { k: string; v: number }) => {
             (window as any).persistence.profile.upgrades[k] = v;
             (window as any).persistence.save();
         }, { k: key, v: val });
     };
 
     // Helper to start game and wait for ready
-    const startGame = async (page: any) => {
+    const startGame = async (page: Page) => {
         await page.getByRole('button', { name: "LET'S GO!" }).click();
         await expect.poll(async () => {
             return await page.evaluate(() => (window as any).gameEngine?.gameState);

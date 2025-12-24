@@ -32,11 +32,11 @@ export class SpriteCache {
         // Pre-render bullets
         ['BLASTER', 'SPREAD', 'RAPID', 'HEAVY', 'BOSS'].forEach(type => {
             const cvs = document.createElement('canvas');
-            let size = type === 'HEAVY' ? 5 : (type === 'BOSS' ? 4 : 2);
+            const size = type === 'HEAVY' ? 5 : (type === 'BOSS' ? 4 : 2);
             let color = type === 'BLASTER' ? '#ff0' : (type === 'SPREAD' ? '#0f0' : (type === 'RAPID' ? '#f0f' : '#f00'));
             if (type === 'BOSS') color = '#f30';
-            let shadow = type === 'BOSS' ? '#f00' : color;
-            let pad = 10;
+            const shadow = type === 'BOSS' ? '#f00' : color;
+            const pad = 10;
             cvs.width = size * 2 + pad * 2; cvs.height = size * 2 + pad * 2;
             const ctx = cvs.getContext('2d')!;
             ctx.translate(size + pad, size + pad);
@@ -79,12 +79,119 @@ export class SpriteCache {
     }
 
     public getBoss(): HTMLCanvasElement {
-        if (!this.cache['boss']) {
-            const cvs = document.createElement('canvas'); cvs.width = 120; cvs.height = 120; const ctx = cvs.getContext('2d')!;
-            ctx.translate(60, 60); ctx.strokeStyle = '#f00'; ctx.lineWidth = 5; ctx.beginPath(); for (let i = 0; i < 6; i++) { const a = i * (Math.PI * 2 / 6); ctx.lineTo(Math.cos(a) * 55, Math.sin(a) * 55); } ctx.closePath(); ctx.stroke();
-            this.cache['boss'] = cvs;
+        // Legacy method - returns default hexagon boss
+        return this.getBossSprite('hexagon', '#f00', 55);
+    }
+
+    public getBossSprite(type: string, color: string, size: number): HTMLCanvasElement {
+        const key = `boss_${type}_${color}_${size}`;
+        if (!this.cache[key]) {
+            const padding = 20;
+            const cvs = document.createElement('canvas');
+            cvs.width = size * 2 + padding * 2;
+            cvs.height = size * 2 + padding * 2;
+            const ctx = cvs.getContext('2d')!;
+            ctx.translate(size + padding, size + padding);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 4;
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+            ctx.shadowColor = color;
+            ctx.shadowBlur = 15;
+
+            ctx.beginPath();
+            switch (type) {
+                case 'hexagon':
+                    for (let i = 0; i < 6; i++) {
+                        const a = i * (Math.PI * 2 / 6);
+                        if (i === 0) ctx.moveTo(Math.cos(a) * size, Math.sin(a) * size);
+                        else ctx.lineTo(Math.cos(a) * size, Math.sin(a) * size);
+                    }
+                    break;
+                case 'diamond':
+                    ctx.moveTo(0, -size);
+                    ctx.lineTo(size, 0);
+                    ctx.lineTo(0, size);
+                    ctx.lineTo(-size, 0);
+                    break;
+                case 'triangle':
+                    ctx.moveTo(0, -size);
+                    ctx.lineTo(size * 0.87, size * 0.5);
+                    ctx.lineTo(-size * 0.87, size * 0.5);
+                    break;
+                case 'cross': {
+                    const arm = size * 0.3;
+                    ctx.moveTo(-arm, -size);
+                    ctx.lineTo(arm, -size);
+                    ctx.lineTo(arm, -arm);
+                    ctx.lineTo(size, -arm);
+                    ctx.lineTo(size, arm);
+                    ctx.lineTo(arm, arm);
+                    ctx.lineTo(arm, size);
+                    ctx.lineTo(-arm, size);
+                    ctx.lineTo(-arm, arm);
+                    ctx.lineTo(-size, arm);
+                    ctx.lineTo(-size, -arm);
+                    ctx.lineTo(-arm, -arm);
+                    break;
+                }
+                case 'star':
+                    for (let i = 0; i < 10; i++) {
+                        const a = (i * Math.PI * 2 / 10) - Math.PI / 2;
+                        const r = i % 2 === 0 ? size : size * 0.5;
+                        if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+                        else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+                    }
+                    break;
+                case 'ring':
+                    // Outer ring
+                    ctx.arc(0, 0, size, 0, Math.PI * 2);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
+                    // Inner ring
+                    ctx.beginPath();
+                    ctx.arc(0, 0, size * 0.6, 0, Math.PI * 2);
+                    break;
+                case 'mothership':
+                    // Large octagon with inner details
+                    for (let i = 0; i < 8; i++) {
+                        const a = i * (Math.PI * 2 / 8);
+                        if (i === 0) ctx.moveTo(Math.cos(a) * size, Math.sin(a) * size);
+                        else ctx.lineTo(Math.cos(a) * size, Math.sin(a) * size);
+                    }
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
+                    // Inner core
+                    ctx.beginPath();
+                    ctx.arc(0, 0, size * 0.4, 0, Math.PI * 2);
+                    ctx.strokeStyle = '#ff0';
+                    ctx.stroke();
+                    // Spokes
+                    ctx.strokeStyle = color;
+                    for (let i = 0; i < 8; i++) {
+                        const a = i * (Math.PI * 2 / 8);
+                        ctx.beginPath();
+                        ctx.moveTo(Math.cos(a) * size * 0.4, Math.sin(a) * size * 0.4);
+                        ctx.lineTo(Math.cos(a) * size * 0.85, Math.sin(a) * size * 0.85);
+                        ctx.stroke();
+                    }
+                    this.cache[key] = cvs;
+                    return this.cache[key];
+                default:
+                    // Fallback to hexagon
+                    for (let i = 0; i < 6; i++) {
+                        const a = i * (Math.PI * 2 / 6);
+                        if (i === 0) ctx.moveTo(Math.cos(a) * size, Math.sin(a) * size);
+                        else ctx.lineTo(Math.cos(a) * size, Math.sin(a) * size);
+                    }
+            }
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            this.cache[key] = cvs;
         }
-        return this.cache['boss'];
+        return this.cache[key];
     }
 
     public getDreadnought(): HTMLCanvasElement {

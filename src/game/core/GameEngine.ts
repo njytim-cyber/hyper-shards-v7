@@ -3,6 +3,10 @@ import { spriteCache } from '../systems/SpriteCache';
 import { persistence } from '../systems/Persistence';
 import { inputSystem } from '../systems/InputSystem';
 import { tutorialSystem } from '../systems/TutorialSystem';
+import { assistPilot } from '../systems/AssistPilot';
+import { showPilotDialogue } from '../../components/ui/DialogueDisplay';
+import { getDialogue } from '../config/PilotDialogueConfig';
+import { PILOT_CLASSES, type PilotId } from '../config/PilotConfig';
 import { Pool } from './Pool';
 import { SpatialGrid } from './SpatialGrid';
 import { Ship } from '../entities/Ship';
@@ -13,8 +17,9 @@ import { FloatingText } from '../entities/FloatingText';
 import { PowerUp } from '../entities/PowerUp';
 import { Boss } from '../entities/Boss';
 import { SKIN_CONFIG } from '../config/ShopConfig';
+import { getBossForWave, MAX_WAVES } from '../config/BossConfig';
 
-export type GameState = 'START' | 'PLAYING' | 'PAUSED' | 'GAMEOVER';
+export type GameState = 'START' | 'PLAYING' | 'PAUSED' | 'GAMEOVER' | 'VICTORY';
 
 interface UICallbacks {
     onScoreUpdate: (score: number) => void;
@@ -23,6 +28,7 @@ interface UICallbacks {
     onWeaponUpdate: (weapon: string) => void;
     onComboUpdate: (combo: number, val: number) => void;
     onGameOver: (score: number, highScore: number, isNewHighScore: boolean) => void;
+    onVictory?: (score: number, highScore: number) => void;
     onGameStart: () => void;
     onPause: (isPaused: boolean) => void;
 }
@@ -55,7 +61,7 @@ export class GameEngine {
     private bulletPool: Pool<Bullet>;
     private particlePool: Pool<Particle>;
     private textPool: Pool<FloatingText>;
-    private spatialGrid: SpatialGrid<any>; // Using any for the wrapper object
+    private spatialGrid: SpatialGrid<{ x: number; y: number; radius: number; ref: Asteroid }>; // Wrapper for grid queries
 
     private uiCallbacks: UICallbacks | null = null;
 
@@ -83,14 +89,14 @@ export class GameEngine {
         tutorialSystem.init();
 
         // Listen for profile updates (e.g. skin change)
-        window.addEventListener('profile-updated', (e: any) => {
+        window.addEventListener('profile-updated', ((e: CustomEvent<{ equippedSkin?: string }>) => {
             if (this.ship && e.detail && e.detail.equippedSkin) {
                 const skinData = SKIN_CONFIG[e.detail.equippedSkin];
                 if (skinData) {
                     this.ship.skin = skinData;
                 }
             }
-        });
+        }) as EventListener);
 
         // Input callbacks
         inputSystem.setCallbacks({
@@ -187,7 +193,7 @@ export class GameEngine {
 
     public spawnTutorialAsteroid(x: number, y: number) {
         if (!this.canvas) return;
-        const asteroid = new Asteroid(x, y, 'large', this.canvas.width, this.canvas.height, this.getGameCallbacks());
+        const asteroid = new Asteroid(x, y, 'large', this.canvas.width, this.canvas.height);
         asteroid.vx = 0;
         asteroid.vy = 0;
         this.asteroids.push(asteroid);
@@ -196,36 +202,94 @@ export class GameEngine {
     public spawnWave() {
         if (!this.canvas) return;
 
+        // Check if this is a boss wave using the config
+        const bossConfig = getBossForWave(this.wave);
+        const isBossWaveNow = bossConfig !== undefined;
+
+        // Calculate asteroid count (no asteroids on boss waves)
         let count = 3 + Math.floor(this.wave * 0.8);
         count = Math.min(count, 15);
-
-        const isBigBoss = this.wave % 10 === 0;
-        const isRegularBoss = !isBigBoss && (this.wave % 3 === 0);
-
         if (this.wave <= 2) count = this.wave;
-        else if (isBigBoss || isRegularBoss) count = 0;
+        else if (isBossWaveNow) count = 0;
 
         Asteroid.currentWave = this.wave;
         this.asteroids = [];
         for (let i = 0; i < count; i++) {
-            this.asteroids.push(new Asteroid(undefined, undefined, 'large', this.canvas.width, this.canvas.height, this.getGameCallbacks()));
+            this.asteroids.push(new Asteroid(undefined, undefined, 'large', this.canvas.width, this.canvas.height));
         }
 
-        let subText = (isBigBoss || isRegularBoss) ?
-            this.funnyBossIntros[Math.floor(Math.random() * this.funnyBossIntros.length)] :
-            this.funnyWaveIntros[Math.floor(Math.random() * this.funnyWaveIntros.length)];
-        let hintText = this.wave === 1 ? "Tip: Kill fast to build COMBO multiplier!" : this.hints[Math.floor(Math.random() * this.hints.length)];
+        // Generate wave text
+        let subText: string;
+        let hintText: string;
 
-        if (isBigBoss || isRegularBoss) {
-            this.boss = new Boss(isBigBoss, this.wave, this.canvas.width);
+        if (bossConfig) {
+            // Boss wave - show boss name
+            subText = bossConfig.isFinalBoss
+                ? `FINAL BOSS: ${bossConfig.name}`
+                : `BOSS: ${bossConfig.name}`;
+            hintText = bossConfig.isFinalBoss
+                ? "DEFEAT THE MOTHERSHIP!"
+                : this.funnyBossIntros[Math.floor(Math.random() * this.funnyBossIntros.length)];
+        } else {
+            subText = this.funnyWaveIntros[Math.floor(Math.random() * this.funnyWaveIntros.length)];
+            hintText = this.wave === 1 ? "Tip: Kill fast to build COMBO multiplier!" : this.hints[Math.floor(Math.random() * this.hints.length)];
+        }
+
+        // Spawn boss if this is a boss wave
+        if (bossConfig) {
+            this.boss = new Boss(bossConfig, this.wave, this.canvas.width);
             audioSystem.playAlarm();
             audioSystem.playMusic('boss');
+
+            // Trigger assist pilot on wave 3 (first boss) automatically
+            if (this.wave === 3) {
+                const playerPilotId = (persistence.profile.selectedPilot || 'striker') as PilotId;
+                this.activateAssistPilot(playerPilotId);
+            }
         } else {
             this.boss = null;
             audioSystem.playMusic('wave');
         }
 
-        this.uiCallbacks?.onWaveUpdate(this.wave, subText, hintText, isBigBoss || isRegularBoss);
+        // Show player pilot wave start dialogue
+        const playerPilotId = (persistence.profile.selectedPilot || 'striker') as PilotId;
+        const pilot = PILOT_CLASSES[playerPilotId];
+        if (pilot) {
+            const eventType = bossConfig ? 'bossAlert' : 'waveStart';
+            const dialogue = getDialogue(playerPilotId, eventType);
+            setTimeout(() => {
+                showPilotDialogue(playerPilotId, dialogue, pilot.name, pilot.icon, pilot.color);
+            }, 1500);  // Slight delay so it doesn't overlap with wave announcement
+        }
+
+        this.uiCallbacks?.onWaveUpdate(this.wave, subText, hintText, isBossWaveNow);
+    }
+
+    // Activate assist pilot
+    private activateAssistPilot(playerPilotId: PilotId) {
+        if (!this.canvas || !this.ship) return;
+
+        assistPilot.activate(
+            playerPilotId,
+            this.canvas.width,
+            this.canvas.height,
+            {
+                onDialogue: (pilotId, text, pilotName, icon, color) => {
+                    showPilotDialogue(pilotId, text, pilotName, icon, color);
+                },
+                onAssistStart: () => {
+                    // Could trigger UI update
+                },
+                onAssistEnd: () => {
+                    // Assist ended
+                },
+                spawnBullet: (x, y, angle, type, damage) => {
+                    const b = this.bulletPool.get(x, y, angle, type, damage, 1, 2, false);
+                    this.bullets.push(b);
+                }
+            },
+            15  // 15 second duration
+        );
     }
 
     private loop(timestamp: number) {
@@ -258,7 +322,7 @@ export class GameEngine {
         if ((persistence.profile.upgrades.interest || 0) > 0) {
             this.interestTimer += dt;
             if (this.interestTimer > 5) {
-                let income = persistence.profile.upgrades.interest * 2;
+                const income = persistence.profile.upgrades.interest * 2;
                 persistence.addShards(income);
                 this.interestTimer = 0;
                 this.spawnText(this.ship.x, this.ship.y + 20, `+${income}`, "#0f0");
@@ -274,6 +338,22 @@ export class GameEngine {
                 this.combo = 1;
                 this.updateHUD();
             }
+        }
+
+        // Assist Pilot update
+        if (assistPilot.active) {
+            const enemyPositions = [
+                ...this.asteroids.map(a => ({ x: a.x, y: a.y })),
+                ...(this.boss ? [{ x: this.boss.x, y: this.boss.y }] : [])
+            ];
+            assistPilot.update(
+                dt,
+                this.ship.x,
+                this.ship.y,
+                this.canvas.width,
+                this.canvas.height,
+                enemyPositions
+            );
         }
 
         // Entities
@@ -313,11 +393,21 @@ export class GameEngine {
                 spawnBullet: (x, y, a, t, d) => {
                     const b = this.bulletPool.get(x, y, a, t, d, 1, 4, false);
                     this.bullets.push(b);
-                }
+                },
+                getPlayerPosition: () => ({
+                    x: this.ship?.x || this.canvas!.width / 2,
+                    y: this.ship?.y || this.canvas!.height / 2
+                })
             }, this.wave);
         }
 
+        // Check for wave completion
         if (!tutorialSystem.active && this.asteroids.length === 0 && (!this.boss || this.boss.dead)) {
+            // Check if game is complete (wave 20 boss defeated)
+            if (this.wave >= MAX_WAVES && this.boss?.dead) {
+                this.victory();
+                return;
+            }
             this.wave++;
             this.spawnWave();
         }
@@ -373,11 +463,11 @@ export class GameEngine {
         for (const a of this.asteroids) {
             // Asteroid needs to satisfy SpatialObject interface
             // Assuming Asteroid has x, y, r (radius)
-            this.spatialGrid.insert({ x: a.x, y: a.y, radius: a.r, ref: a } as any);
+            this.spatialGrid.insert({ x: a.x, y: a.y, radius: a.r, ref: a });
         }
 
         // 2. Bullets vs Enemies (Asteroids & Boss)
-        for (let b of this.bullets) {
+        for (const b of this.bullets) {
             if (!b.active) continue;
 
             if (b.isEnemy) {
@@ -418,7 +508,7 @@ export class GameEngine {
                 // Player bullets vs Asteroids (Grid Query)
                 this.spatialGrid.query(b.x, b.y, b.radius, (item) => {
                     if (!b.active) return; // Bullet might have died in previous callback
-                    const a = (item as any).ref as Asteroid;
+                    const a = item.ref;
                     // Double check distance (broad phase -> narrow phase)
                     const d = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
                     if (d < (a.r + b.radius) ** 2) {
@@ -458,6 +548,7 @@ export class GameEngine {
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
         this.ship?.draw(this.ctx);
+        assistPilot.draw(this.ctx);  // Draw assist pilot
         this.bullets.forEach(b => b.draw(this.ctx!));
         this.boss?.draw(this.ctx);
         this.asteroids.forEach(a => a.draw(this.ctx!));
@@ -470,7 +561,7 @@ export class GameEngine {
         this.lives--;
         this.combo = 1;
         this.updateHUD();
-        let invTime = 2.0 + ((persistence.profile.upgrades.shieldDur || 0) * 0.5);
+        const invTime = 2.0 + ((persistence.profile.upgrades.shieldDur || 0) * 0.5);
         if (this.ship) {
             this.ship.reset(this.canvas!.width, this.canvas!.height, invTime);
         }
@@ -523,6 +614,33 @@ export class GameEngine {
         this.uiCallbacks?.onGameOver(this.score, persistence.profile.highScore, isNewHighScore);
     }
 
+    private victory() {
+        this.gameState = 'VICTORY';
+        audioSystem.playPowerUp(); // Victory sound
+
+        // Big bonus for completing all 20 waves
+        const victoryBonus = 500;
+        persistence.addShards(victoryBonus);
+        this.score += victoryBonus * 10;
+
+        // Update stats
+        let isNewHighScore = false;
+        if (this.score > persistence.profile.highScore) {
+            persistence.profile.highScore = this.score;
+            isNewHighScore = true;
+        }
+        if (this.wave > persistence.profile.maxWave) persistence.profile.maxWave = this.wave;
+        persistence.save();
+
+        // Trigger victory callback or fall back to game over
+        if (this.uiCallbacks?.onVictory) {
+            this.uiCallbacks.onVictory(this.score, persistence.profile.highScore);
+        } else {
+            // Fallback: use game over with victory flag implied by state
+            this.uiCallbacks?.onGameOver(this.score, persistence.profile.highScore, isNewHighScore);
+        }
+    }
+
     private updateHUD() {
         this.uiCallbacks?.onLivesUpdate(this.lives, this.ship?.shields || 0);
         this.uiCallbacks?.onScoreUpdate(this.score);
@@ -542,7 +660,7 @@ export class GameEngine {
             spawnText: this.spawnText.bind(this),
             spawnPowerUp: (p: PowerUp) => this.powerups.push(p),
             spawnAsteroid: (x: number, y: number, size: string) => {
-                this.asteroids.push(new Asteroid(x, y, size, this.canvas!.width, this.canvas!.height, this.getGameCallbacks()));
+                this.asteroids.push(new Asteroid(x, y, size, this.canvas!.width, this.canvas!.height));
             },
             onScore: (amount: number) => {
                 this.score += amount;

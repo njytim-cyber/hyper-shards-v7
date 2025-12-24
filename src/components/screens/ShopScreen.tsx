@@ -142,7 +142,7 @@ export const ShopScreen: React.FC<ShopScreenProps> = ({ onClose }) => {
                             role="tab"
                             aria-selected={tab === t}
                             className={`shop-tab ${tab === t ? 'active' : ''}`}
-                            onClick={() => setTab(t as any)}
+                            onClick={() => setTab(t as 'OFFENSE' | 'DEFENSE' | 'UTILITY' | 'SKINS')}
                         >
                             {t}
                         </button>
@@ -182,7 +182,7 @@ export const ShopScreen: React.FC<ShopScreenProps> = ({ onClose }) => {
                             );
                         })
                     ) : (
-                        Object.entries(UPGRADE_CONFIG).filter(([_, item]) => item.cat === tab).map(([key, item]) => {
+                        Object.entries(UPGRADE_CONFIG).filter(([, item]) => item.cat === tab).map(([key, item]) => {
                             const level = upgrades[key] || 0;
                             const maxed = level >= item.max;
 
