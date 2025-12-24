@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// Pool uses any[] for maximum flexibility in object creation/reset functions
+
 export class Pool<T> {
     private createFn: (...args: any[]) => T;
     private resetFn: (item: T, ...args: any[]) => void;

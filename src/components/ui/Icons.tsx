@@ -1,5 +1,3 @@
-import React from 'react';
-
 export const Icons = () => (
     <svg style={{ display: 'none' }}>
         <symbol id="icon-heart" viewBox="0 0 24 24">

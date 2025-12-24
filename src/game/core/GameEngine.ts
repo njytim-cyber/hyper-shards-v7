@@ -17,7 +17,8 @@ import { FloatingText } from '../entities/FloatingText';
 import { PowerUp } from '../entities/PowerUp';
 import { Boss } from '../entities/Boss';
 import { SKIN_CONFIG } from '../config/ShopConfig';
-import { getBossForWave, MAX_WAVES } from '../config/BossConfig';
+import { getBossForWave, MAX_WAVES, BOSS_CONFIG } from '../config/BossConfig';
+import { getCampaignLevel, type CampaignLevel } from '../config/CampaignConfig';
 
 export type GameState = 'START' | 'PLAYING' | 'PAUSED' | 'GAMEOVER' | 'VICTORY';
 
@@ -29,6 +30,7 @@ interface UICallbacks {
     onComboUpdate: (combo: number, val: number) => void;
     onGameOver: (score: number, highScore: number, isNewHighScore: boolean) => void;
     onVictory?: (score: number, highScore: number) => void;
+    onCampaignComplete?: (levelId: number, stars: number, time: number, tookDamage: boolean, maxCombo: number) => void;
     onGameStart: () => void;
     onPause: (isPaused: boolean) => void;
 }
@@ -57,6 +59,13 @@ export class GameEngine {
     private interestTimer: number = 0;
     private regenTimer: number = 0;
     private hasRevived: boolean = false;
+
+    // Campaign mode tracking
+    private campaignLevel: CampaignLevel | null = null;
+    private campaignStartTime: number = 0;
+    private campaignTookDamage: boolean = false;
+    private campaignMaxCombo: number = 0;
+    private campaignBossIndex: number = 0;  // For boss rush mode
 
     private bulletPool: Pool<Bullet>;
     private particlePool: Pool<Particle>;
@@ -175,6 +184,129 @@ export class GameEngine {
             this.ship.reset(this.canvas.width, this.canvas.height);
             this.spawnWave();
         }
+    }
+
+    // Start a campaign level with specific configuration
+    public startCampaignLevel(levelId: number) {
+        const level = getCampaignLevel(levelId);
+        if (!this.canvas || !level) return;
+
+        // Reset campaign tracking
+        this.campaignLevel = level;
+        this.campaignStartTime = Date.now();
+        this.campaignTookDamage = false;
+        this.campaignMaxCombo = 0;
+        this.campaignBossIndex = 0;
+
+        this.score = 0;
+        this.wave = level.waveStart;
+        this.gameState = 'PLAYING';
+
+        this.ship = new Ship(this.bulletPool);
+
+        // Apply current skin
+        const skinKey = persistence.profile.equippedSkin || 'default';
+        const skinData = SKIN_CONFIG[skinKey];
+        if (skinData) this.ship.skin = skinData;
+
+        this.lives = this.ship.maxLives;
+        this.hasRevived = false;
+
+        this.bullets = [];
+        this.asteroids = [];
+        this.particles = [];
+        this.floatingTexts = [];
+        this.powerups = [];
+        this.boss = null;
+
+        this.ship.reset(this.canvas.width, this.canvas.height);
+
+        // Show level briefing
+        this.uiCallbacks?.onWaveUpdate(levelId, level.name, level.briefing[0], level.type === 'boss' || level.type === 'boss_rush');
+
+        // Spawn initial wave after brief delay
+        setTimeout(() => {
+            if (this.gameState === 'PLAYING') {
+                this.spawnCampaignWave();
+            }
+        }, 1500);
+
+        audioSystem.playMusic('wave');
+    }
+
+    // Spawn wave for campaign mode with modifiers
+    private spawnCampaignWave() {
+        if (!this.canvas || !this.campaignLevel) return;
+
+        const level = this.campaignLevel;
+        const mod = level.modifiers;
+
+        // Boss rush mode: spawn next boss
+        if (level.type === 'boss_rush') {
+            const bossWaves = [3, 6, 9, 12, 15, 18, 20];  // All boss wave numbers
+            if (this.campaignBossIndex < bossWaves.length) {
+                const bossWave = bossWaves[this.campaignBossIndex];
+                const bossConfig = getBossForWave(bossWave);
+                if (bossConfig) {
+                    this.boss = new Boss(bossConfig, bossWave, this.canvas.width);
+                    this.boss.hp = Math.floor(this.boss.hp * mod.bossHp);
+                    audioSystem.playAlarm();
+                    audioSystem.playMusic('boss');
+                    this.uiCallbacks?.onWaveUpdate(this.campaignBossIndex + 1, `BOSS ${this.campaignBossIndex + 1}/7`, bossConfig.name, true);
+                }
+            }
+            return;
+        }
+
+        // Survival mode: continuous asteroid spawn
+        if (level.type === 'survival') {
+            const count = Math.floor(5 * mod.asteroidCount);
+            Asteroid.currentWave = this.wave;
+            for (let i = 0; i < count; i++) {
+                const ast = new Asteroid(undefined, undefined, 'large', this.canvas.width, this.canvas.height);
+                ast.vx *= mod.asteroidSpeed;
+                ast.vy *= mod.asteroidSpeed;
+                ast.hp = Math.ceil(ast.hp * mod.asteroidHp);
+                this.asteroids.push(ast);
+            }
+            this.uiCallbacks?.onWaveUpdate(this.wave, 'SURVIVE', `Wave ${this.wave}`, false);
+            return;
+        }
+
+        // Standard/Boss levels
+        const bossConfig = level.bossId ? getBossForWave(this.wave) || BOSS_CONFIG[3] : undefined;  // Use sentinel as fallback
+        const isBossWave = !!bossConfig && this.wave === level.waveEnd;
+
+        // Calculate asteroid count with modifiers
+        let count = 3 + Math.floor(this.wave * 0.8);
+        count = Math.min(count, 15);
+        count = Math.floor(count * mod.asteroidCount);
+        if (isBossWave) count = 0;
+
+        Asteroid.currentWave = this.wave;
+        for (let i = 0; i < count; i++) {
+            const ast = new Asteroid(undefined, undefined, 'large', this.canvas.width, this.canvas.height);
+            ast.vx *= mod.asteroidSpeed;
+            ast.vy *= mod.asteroidSpeed;
+            ast.hp = Math.ceil(ast.hp * mod.asteroidHp);
+            this.asteroids.push(ast);
+        }
+
+        // Spawn boss if this is the final wave of a boss level
+        if (isBossWave && level.bossId) {
+            const bossCfg = getBossForWave(level.waveEnd) || BOSS_CONFIG[3];
+            if (bossCfg) {
+                this.boss = new Boss(bossCfg, this.wave, this.canvas.width);
+                this.boss.hp = Math.floor(this.boss.hp * mod.bossHp);
+                audioSystem.playAlarm();
+                audioSystem.playMusic('boss');
+            }
+        } else {
+            audioSystem.playMusic('wave');
+        }
+
+        const subText = isBossWave ? `BOSS: ${bossConfig?.name || 'Unknown'}` : this.funnyWaveIntros[Math.floor(Math.random() * this.funnyWaveIntros.length)];
+        this.uiCallbacks?.onWaveUpdate(this.wave, subText, this.hints[Math.floor(Math.random() * this.hints.length)], isBossWave);
     }
 
     public togglePause() {
@@ -403,6 +535,47 @@ export class GameEngine {
 
         // Check for wave completion
         if (!tutorialSystem.active && this.asteroids.length === 0 && (!this.boss || this.boss.dead)) {
+            // Track max combo for campaign objectives
+            if (this.combo > this.campaignMaxCombo) {
+                this.campaignMaxCombo = this.combo;
+            }
+
+            // Campaign mode completion checks
+            if (this.campaignLevel) {
+                const level = this.campaignLevel;
+
+                // Boss Rush: advance to next boss or complete
+                if (level.type === 'boss_rush' && this.boss?.dead) {
+                    this.campaignBossIndex++;
+                    if (this.campaignBossIndex >= 7) {
+                        this.completeCampaignLevel();
+                        return;
+                    }
+                    this.spawnCampaignWave();
+                    return;
+                }
+
+                // Survival mode: continue spawning waves
+                if (level.type === 'survival') {
+                    this.wave++;
+                    this.spawnCampaignWave();
+                    return;
+                }
+
+                // Standard/Boss: check if we reached wave end
+                if (this.wave >= level.waveEnd) {
+                    // Level complete!
+                    this.completeCampaignLevel();
+                    return;
+                }
+
+                // Advance to next wave
+                this.wave++;
+                this.spawnCampaignWave();
+                return;
+            }
+
+            // Normal arcade mode
             // Check if game is complete (wave 20 boss defeated)
             if (this.wave >= MAX_WAVES && this.boss?.dead) {
                 this.victory();
@@ -549,17 +722,20 @@ export class GameEngine {
 
         this.ship?.draw(this.ctx);
         assistPilot.draw(this.ctx);  // Draw assist pilot
-        this.bullets.forEach(b => b.draw(this.ctx!));
+
+        // Use indexed for loops instead of forEach for better JIT optimization
+        for (let i = 0; i < this.bullets.length; i++) this.bullets[i].draw(this.ctx);
         this.boss?.draw(this.ctx);
-        this.asteroids.forEach(a => a.draw(this.ctx!));
-        this.powerups.forEach(p => p.draw(this.ctx!));
-        this.particles.forEach(p => p.draw(this.ctx!));
-        this.floatingTexts.forEach(t => t.draw(this.ctx!));
+        for (let i = 0; i < this.asteroids.length; i++) this.asteroids[i].draw(this.ctx);
+        for (let i = 0; i < this.powerups.length; i++) this.powerups[i].draw(this.ctx);
+        for (let i = 0; i < this.particles.length; i++) this.particles[i].draw(this.ctx);
+        for (let i = 0; i < this.floatingTexts.length; i++) this.floatingTexts[i].draw(this.ctx);
     }
 
     private handlePlayerHit() {
         this.lives--;
         this.combo = 1;
+        this.campaignTookDamage = true;  // Track for campaign objectives
         this.updateHUD();
         const invTime = 2.0 + ((persistence.profile.upgrades.shieldDur || 0) * 0.5);
         if (this.ship) {
@@ -638,6 +814,62 @@ export class GameEngine {
         } else {
             // Fallback: use game over with victory flag implied by state
             this.uiCallbacks?.onGameOver(this.score, persistence.profile.highScore, isNewHighScore);
+        }
+    }
+
+    // Complete a campaign level and calculate stars
+    private completeCampaignLevel() {
+        if (!this.campaignLevel) return;
+
+        const level = this.campaignLevel;
+        const elapsedTime = (Date.now() - this.campaignStartTime) / 1000;  // seconds
+
+        // Calculate stars based on objectives
+        let stars = 1;  // Base star for completion
+
+        const star2 = level.stars[1];
+        const star3 = level.stars[2];
+
+        // Check star 2 objective
+        if (this.checkStarCriteria(star2, elapsedTime)) {
+            stars = 2;
+        }
+
+        // Check star 3 objective  
+        if (this.checkStarCriteria(star3, elapsedTime)) {
+            stars = 3;
+        }
+
+        // Notify UI of campaign completion
+        this.gameState = 'VICTORY';
+        audioSystem.playPowerUp(); // Victory sound
+
+        this.uiCallbacks?.onCampaignComplete?.(
+            level.id,
+            stars,
+            elapsedTime,
+            this.campaignTookDamage,
+            this.campaignMaxCombo
+        );
+
+        // Reset campaign state
+        this.campaignLevel = null;
+    }
+
+    private checkStarCriteria(criteria: { check: string; value?: number }, elapsedTime: number): boolean {
+        switch (criteria.check) {
+            case 'complete':
+                return true;
+            case 'no_damage':
+                return !this.campaignTookDamage;
+            case 'time_limit':
+                return elapsedTime <= (criteria.value || 999);
+            case 'survival_time':
+                return elapsedTime >= (criteria.value || 0);
+            case 'combo':
+                return this.campaignMaxCombo >= (criteria.value || 0);
+            default:
+                return false;
         }
     }
 

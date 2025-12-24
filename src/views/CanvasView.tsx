@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 
 interface CanvasViewProps {
     onCanvasReady: (canvas: HTMLCanvasElement) => void;
@@ -43,6 +43,7 @@ export const CanvasView = forwardRef<HTMLCanvasElement, CanvasViewProps>(({ onCa
                     const adapter = await navigator.gpu.requestAdapter();
                     if (adapter) {
                         const device = await adapter.requestDevice();
+                        void device; // Reserved for future WebGPU implementation
                         const context = canvas.getContext('webgpu');
                         if (context) {
                             console.log("CanvasView: WebGPU Context Initialized");

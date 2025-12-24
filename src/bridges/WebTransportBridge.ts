@@ -1,14 +1,26 @@
 // WebTransport Bridge for Hyper Shards v7
 // Encapsulates all browser-native WebTransport API calls.
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// WebTransport API types are not fully available in TypeScript, using any for experimental API
+
 interface WebTransportBridgeConfig {
     url: string;
     onDatagramReceived: (data: Uint8Array) => void;
     onClosed?: () => void;
 }
 
+// Extend Window interface for native checks
+declare global {
+    interface Window {
+        __TAURI__?: unknown;
+        Capacitor?: unknown;
+        WebTransport?: new (url: string) => any;
+    }
+}
+
 export class WebTransportBridge {
-    private transport: any | null = null; // WebTransport type might not be available in all envs
+    private transport: any | null = null;
     private datagramWriter: any | null = null;
     private connected: boolean = false;
     private config: WebTransportBridgeConfig;
@@ -19,19 +31,17 @@ export class WebTransportBridge {
 
     public async connect(): Promise<void> {
         // Native Awareness Guard
-        if ((window as any).__TAURI__ || (window as any).Capacitor) {
-            console.warn("WebTransportBridge: Native environment detected. WebTransport might not be supported directly. Implementing fallback or polyfill logic here is required for production.");
-            // For now, we proceed as if it's a browser or the webview supports it.
+        if (window.__TAURI__ || window.Capacitor) {
+            console.warn("WebTransportBridge: Native environment detected. WebTransport might not be supported directly.");
         }
 
-        if (!('WebTransport' in window)) {
+        if (!window.WebTransport) {
             console.error("WebTransportBridge: WebTransport is not supported in this browser.");
             return;
         }
 
         try {
-            // @ts-ignore - WebTransport is experimental
-            this.transport = new WebTransport(this.config.url);
+            this.transport = new window.WebTransport(this.config.url);
             await this.transport.ready;
             this.connected = true;
             console.log(`WebTransportBridge: Connected to ${this.config.url}`);
@@ -47,11 +57,10 @@ export class WebTransportBridge {
 
     public sendDatagram(data: Uint8Array): void {
         if (!this.connected || !this.datagramWriter) {
-            // console.warn("WebTransportBridge: Not connected, cannot send datagram.");
             return;
         }
         // Fire and forget for unreliable datagrams
-        this.datagramWriter.write(data).catch((e: any) => console.error("WebTransportBridge: Send failed", e));
+        this.datagramWriter.write(data).catch((e: unknown) => console.error("WebTransportBridge: Send failed", e));
     }
 
     private async readDatagrams() {

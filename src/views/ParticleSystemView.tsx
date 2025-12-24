@@ -1,11 +1,12 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 
 interface ParticleSystemViewProps {
     particleCount: number;
     color: [number, number, number, number]; // RGBA
 }
 
-export const ParticleSystemView: React.FC<ParticleSystemViewProps> = ({ particleCount, color }) => {
+export const ParticleSystemView: React.FC<ParticleSystemViewProps> = ({ color }) => {
+    // Note: particleCount prop is reserved for future WebGPU particle system
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const deviceRef = useRef<GPUDevice | null>(null);
     const contextRef = useRef<GPUCanvasContext | null>(null);

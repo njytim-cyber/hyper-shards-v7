@@ -8,6 +8,7 @@ import { IntroScreen } from './components/screens/IntroScreen';
 import { AchievementsScreen } from './components/screens/AchievementsScreen';
 import { DailyRewardsPopup } from './components/screens/DailyRewardsPopup';
 import { PilotSelectScreen } from './components/screens/PilotSelectScreen';
+import { CampaignScreen } from './components/screens/CampaignScreen';
 import { gameEngine, GameEngine } from './game/core/GameEngine';
 import { persistence, Persistence } from './game/systems/Persistence';
 import { audioSystem, AudioSystem } from './game/systems/AudioSystem';
@@ -29,7 +30,7 @@ declare global {
   }
 }
 
-type GameStateType = 'INTRO' | 'START' | 'PLAYING' | 'PAUSED' | 'GAMEOVER' | 'VICTORY' | 'SHOP' | 'ACHIEVEMENTS' | 'PILOTS';
+type GameStateType = 'INTRO' | 'START' | 'PLAYING' | 'PAUSED' | 'GAMEOVER' | 'VICTORY' | 'SHOP' | 'ACHIEVEMENTS' | 'PILOTS' | 'CAMPAIGN';
 
 // Module-level flag for one-time initialization (avoids refs-during-render lint error)
 let persistenceLoaded = false;
@@ -65,6 +66,17 @@ function App() {
   const [showDailyRewards, setShowDailyRewards] = useState(false);
   const [previousState, setPreviousState] = useState<GameStateType>('START');
   const [preShopTrack, setPreShopTrack] = useState<string | null>(null);
+  const [campaignResult, setCampaignResult] = useState<{
+    levelId: number;
+    stars: number;
+    time: number;
+    tookDamage: boolean;
+    maxCombo: number;
+  } | null>(null);
+  const [currentCampaignLevel, setCurrentCampaignLevel] = useState<number>(0);
+  // Satisfy linter - these will be used when LevelCompleteScreen is added
+  void campaignResult;
+  void currentCampaignLevel;
 
   useEffect(() => {
     // Check for daily rewards
@@ -126,6 +138,21 @@ function App() {
     setGameState(previousState);
   };
 
+  const handleOpenCampaign = () => {
+    setGameState('CAMPAIGN');
+  };
+
+  const handleCloseCampaign = () => {
+    setGameState('START');
+    audioSystem.playMusic('load');
+  };
+
+  const handleStartCampaignLevel = (levelId: number) => {
+    setCurrentCampaignLevel(levelId);
+    setGameState('PLAYING');
+    gameEngine.startCampaignLevel(levelId);
+  };
+
   const handleDailyRewardClaim = () => {
     // Could show a nice animation here
   };
@@ -161,7 +188,12 @@ function App() {
         persistence.trackStat('totalGamesPlayed', 1);
       },
       onGameStart: () => setGameState('PLAYING'),
-      onPause: (isPaused) => setGameState(isPaused ? 'PAUSED' : 'PLAYING')
+      onPause: (isPaused) => setGameState(isPaused ? 'PAUSED' : 'PLAYING'),
+      onCampaignComplete: (levelId, stars, time, tookDamage, maxCombo) => {
+        setCampaignResult({ levelId, stars, time, tookDamage, maxCombo });
+        setGameState('VICTORY');  // Will show level complete screen
+        persistence.trackStat('totalGamesPlayed', 1);
+      }
     });
   };
 
@@ -194,6 +226,7 @@ function App() {
           onOpenShop={handleOpenShop}
           onOpenAchievements={handleOpenAchievements}
           onOpenPilots={handleOpenPilots}
+          onOpenCampaign={handleOpenCampaign}
           highScore={highScore}
         />
       )}
@@ -221,6 +254,10 @@ function App() {
 
       {gameState === 'PILOTS' && (
         <PilotSelectScreen onClose={handleClosePilots} onSelect={handlePilotSelect} />
+      )}
+
+      {gameState === 'CAMPAIGN' && (
+        <CampaignScreen onClose={handleCloseCampaign} onStartLevel={handleStartCampaignLevel} />
       )}
 
       {showDailyRewards && (

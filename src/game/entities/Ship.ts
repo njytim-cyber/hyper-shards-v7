@@ -3,6 +3,8 @@ import { persistence } from '../systems/Persistence';
 import { audioSystem } from '../systems/AudioSystem';
 import { Bullet } from './Bullet';
 import { Pool } from '../core/Pool';
+import type { SkinItem } from '../config/ShopConfig';
+import { SKIN_CONFIG } from '../config/ShopConfig';
 
 interface ShipCallbacks {
     spawnBullet: (b: Bullet) => void;
@@ -11,6 +13,32 @@ interface ShipCallbacks {
     updateWeaponUI: (type: string) => void;
     updateHUD: () => void;
     gameOver: () => void;
+}
+
+// Input state interfaces
+export interface KeyState {
+    w?: boolean;
+    a?: boolean;
+    s?: boolean;
+    d?: boolean;
+    q?: boolean;
+    e?: boolean;
+    Space?: boolean;
+    ArrowUp?: boolean;
+    ArrowDown?: boolean;
+    ArrowLeft?: boolean;
+    ArrowRight?: boolean;
+}
+
+export interface TouchStick {
+    active: boolean;
+    vecX: number;
+    vecY: number;
+}
+
+export interface TouchSticks {
+    left: TouchStick;
+    right: TouchStick;
 }
 
 export class Ship {
@@ -29,7 +57,7 @@ export class Ship {
     public dashCooldown: number = 0;
     public maxLives: number = 3;
     public damageMult: number = 1;
-    public skin: any;
+    public skin: SkinItem;
     public shields: number = 0;
     public speedBoostTime: number = 0;
     public invincibleTime: number = 1.5;
@@ -43,11 +71,7 @@ export class Ship {
         this.reset();
         this.maxLives = 3 + (persistence.profile.upgrades.hull || 0);
         this.damageMult = 1 + ((persistence.profile.upgrades.damage || 0) * 0.1);
-        // Skin config is in index.html, we need to port it or access it.
-        // For now, I'll assume we can get it from a config file or just hardcode defaults if missing.
-        // I'll create a SkinConfig in a separate file later or inline it.
-        // For now, minimal skin object.
-        this.skin = { colors: { main: '#0ff', eng: '#0ff', trail: '#0ff' }, design: 'fighter' };
+        this.skin = SKIN_CONFIG.default;
     }
 
     public reset(canvasWidth: number = window.innerWidth, canvasHeight: number = window.innerHeight, initialInvincibility: number = 1.5) {
@@ -70,16 +94,16 @@ export class Ship {
         if (this.dashCooldown <= 0) {
             this.isDashing = true;
             this.dashTime = 0.2;
-            let coolReduc = (persistence.profile.upgrades.dashCool || 0) * 0.1;
+            const coolReduc = (persistence.profile.upgrades.dashCool || 0) * 0.1;
             this.dashCooldown = 2.0 * (1 - coolReduc);
-            let distMult = 1 + ((persistence.profile.upgrades.dashDist || 0) * 0.4);
+            const distMult = 1 + ((persistence.profile.upgrades.dashDist || 0) * 0.4);
             this.vx = Math.cos(this.angle) * 600 * distMult;
             this.vy = Math.sin(this.angle) * 600 * distMult;
             audioSystem.playDash();
         }
     }
 
-    public update(dt: number, keys: any, touchSticks: any, canvasWidth: number, canvasHeight: number, callbacks: ShipCallbacks, combo: number) {
+    public update(dt: number, keys: KeyState, touchSticks: TouchSticks, canvasWidth: number, canvasHeight: number, callbacks: ShipCallbacks, combo: number) {
         if (this.dashCooldown > 0) this.dashCooldown -= dt;
         if (this.speedBoostTime > 0) this.speedBoostTime -= dt;
 
@@ -190,16 +214,16 @@ export class Ship {
         if (Math.random() < (persistence.profile.upgrades.crit || 0) * 0.1) { dmg *= 3; isCrit = true; }
         let pierce = 1 + (persistence.profile.upgrades.pierce || 0);
         if (type === 'HEAVY') pierce += 4;
-        let size = 2 + (type === 'HEAVY' ? 3 : 0) + ((persistence.profile.upgrades.size || 0) * 1);
-        let spdMult = 1 + ((persistence.profile.upgrades.bulletSpd || 0) * 0.2);
-        let homing = (persistence.profile.upgrades.homing || 0) > 0;
+        const size = 2 + (type === 'HEAVY' ? 3 : 0) + ((persistence.profile.upgrades.size || 0) * 1);
+        const spdMult = 1 + ((persistence.profile.upgrades.bulletSpd || 0) * 0.2);
+        const homing = (persistence.profile.upgrades.homing || 0) > 0;
 
         const nx = this.x + Math.cos(this.angle) * 25;
         const ny = this.y + Math.sin(this.angle) * 25;
         const pitch = 1 + (combo * 0.05);
 
         const fireBullet = (a: number) => {
-            let b = this.bulletPool.get(nx, ny, a, type, dmg, pierce, size, homing);
+            const b = this.bulletPool.get(nx, ny, a, type, dmg, pierce, size, homing);
             if (isCrit) b.color = '#fff';
             b.speed *= spdMult;
             callbacks.spawnBullet(b);
@@ -210,7 +234,7 @@ export class Ship {
         else { fireBullet(this.angle); }
 
         if ((persistence.profile.upgrades.rear || 0) > 0) {
-            let b = this.bulletPool.get(nx, ny, this.angle + Math.PI, type, dmg, pierce, size, homing);
+            const b = this.bulletPool.get(nx, ny, this.angle + Math.PI, type, dmg, pierce, size, homing);
             b.speed *= spdMult;
             callbacks.spawnBullet(b);
         }

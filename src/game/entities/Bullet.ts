@@ -1,4 +1,5 @@
 import { Asteroid } from './Asteroid';
+import { spriteCache } from '../systems/SpriteCache';
 
 export class Bullet {
     public x: number = 0;
@@ -47,15 +48,15 @@ export class Bullet {
         if (this.homing && !this.isEnemy && asteroids.length > 0) {
             let nearest: Asteroid | null = null;
             let minDist = 100000;
-            for (let a of asteroids) {
-                let d = (a.x - this.x) ** 2 + (a.y - this.y) ** 2;
+            for (const a of asteroids) {
+                const d = (a.x - this.x) ** 2 + (a.y - this.y) ** 2;
                 if (d < minDist) {
                     minDist = d;
                     nearest = a;
                 }
             }
             if (nearest) {
-                let targetAngle = Math.atan2(nearest.y - this.y, nearest.x - this.x);
+                const targetAngle = Math.atan2(nearest.y - this.y, nearest.x - this.x);
                 let diff = targetAngle - this.angle;
                 while (diff < -Math.PI) diff += Math.PI * 2;
                 while (diff > Math.PI) diff -= Math.PI * 2;
@@ -71,15 +72,8 @@ export class Bullet {
     }
 
     public draw(ctx: CanvasRenderingContext2D) {
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-        ctx.fillStyle = this.color;
-        ctx.fill();
-        if (this.isEnemy) {
-            ctx.shadowColor = '#f00'; ctx.shadowBlur = 8;
-        } else {
-            ctx.shadowColor = this.color; ctx.shadowBlur = 5;
-        }
-        ctx.shadowBlur = 0;
+        // Use pre-cached sprite for performance (no shadow calculations per frame)
+        const sprite = spriteCache.getBullet(this.type);
+        ctx.drawImage(sprite, this.x - sprite.width / 2, this.y - sprite.height / 2);
     }
 }

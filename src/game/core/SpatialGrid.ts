@@ -11,7 +11,7 @@ export class SpatialGrid<T extends SpatialObject> {
     private grid: Map<string, T[]> = new Map();
     private queryId: number = 0;
 
-    constructor(width: number, height: number, cellSize: number) {
+    constructor(_width: number, _height: number, cellSize: number) {
         this.cellSize = cellSize;
     }
 

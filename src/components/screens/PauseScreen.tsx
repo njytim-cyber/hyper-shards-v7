@@ -22,11 +22,6 @@ export const PauseScreen: React.FC<PauseScreenProps> = ({ onResume, onOpenShop }
             }
         };
 
-        draw('p-blaster', spriteCache.getBullet('BLASTER'));
-        draw('p-spread', spriteCache.getBullet('SPREAD'));
-        draw('p-rapid', spriteCache.getBullet('RAPID'));
-        draw('p-heavy', spriteCache.getBullet('HEAVY'));
-
         draw('p-shield', spriteCache.getPowerUp('SHIELD'));
         draw('p-nuke', spriteCache.getPowerUp('NUKE'));
         draw('p-speed', spriteCache.getPowerUp('SPEED'));
@@ -55,10 +50,10 @@ export const PauseScreen: React.FC<PauseScreenProps> = ({ onResume, onOpenShop }
             <div className="pause-grid">
                 <div className="pause-col">
                     <div className="pause-header">Arsenal</div>
-                    <div className="pause-item"><canvas className="pause-icon-canvas" id="p-blaster" width="30" height="30"></canvas><div><div className="pause-label" style={{ color: '#ff0' }}>BLASTER</div></div></div>
-                    <div className="pause-item"><canvas className="pause-icon-canvas" id="p-spread" width="30" height="30"></canvas><div><div className="pause-label" style={{ color: '#0f0' }}>SPREAD</div></div></div>
-                    <div className="pause-item"><canvas className="pause-icon-canvas" id="p-rapid" width="30" height="30"></canvas><div><div className="pause-label" style={{ color: '#f0f' }}>RAPID</div></div></div>
-                    <div className="pause-item"><canvas className="pause-icon-canvas" id="p-heavy" width="30" height="30"></canvas><div><div className="pause-label" style={{ color: '#f00' }}>HEAVY</div></div></div>
+                    <div className="pause-item"><svg className="pause-icon-svg" style={{ color: '#ff0' }}><use xlinkHref="#icon-blaster" /></svg><div><div className="pause-label" style={{ color: '#ff0' }}>BLASTER</div></div></div>
+                    <div className="pause-item"><svg className="pause-icon-svg" style={{ color: '#0f0' }}><use xlinkHref="#icon-spread" /></svg><div><div className="pause-label" style={{ color: '#0f0' }}>SPREAD</div></div></div>
+                    <div className="pause-item"><svg className="pause-icon-svg" style={{ color: '#f0f' }}><use xlinkHref="#icon-rapid" /></svg><div><div className="pause-label" style={{ color: '#f0f' }}>RAPID</div></div></div>
+                    <div className="pause-item"><svg className="pause-icon-svg" style={{ color: '#f00' }}><use xlinkHref="#icon-heavy" /></svg><div><div className="pause-label" style={{ color: '#f00' }}>HEAVY</div></div></div>
                 </div>
                 <div className="pause-col">
                     <div className="pause-header">Power-Ups</div>

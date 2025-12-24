@@ -7,5 +7,12 @@
 			"path": "../_agent-library"
 		}
 	],
-	"settings": {}
+	"settings": {
+		// PASTE THE COPIED ID HERE. Example:
+		"antigravity.allowedCommands": [
+			"npx",
+			"npm",
+			"eslint"
+		]
+	}
 }
