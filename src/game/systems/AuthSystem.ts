@@ -5,12 +5,21 @@ export class AuthSystem {
     public user: User | null = null;
     public session: Session | null = null;
     public loading: boolean = true;
+    public offlineMode: boolean = false;
 
     constructor() {
         this.init();
     }
 
     private async init() {
+        // If supabase is not configured, run in offline mode
+        if (!supabase) {
+            console.warn('[AuthSystem] Running in offline mode - no Supabase configured');
+            this.offlineMode = true;
+            this.loading = false;
+            return;
+        }
+
         try {
             const { data: { session } } = await supabase.auth.getSession();
             this.session = session;
@@ -30,18 +39,19 @@ export class AuthSystem {
     }
 
     public async signInWithEmail(email: string) {
-        // Magic link login for simplicity, or we can do password
+        if (!supabase) return { error: { message: 'Offline mode - sign in unavailable' } };
         const { error } = await supabase.auth.signInWithOtp({ email });
         return { error };
     }
 
-    // Keeping it simple with Anonymous login for games usually
     public async signInAnonymously() {
+        if (!supabase) return { data: null, error: { message: 'Offline mode - sign in unavailable' } };
         const { data, error } = await supabase.auth.signInAnonymously();
         return { data, error };
     }
 
     public async signOut() {
+        if (!supabase) return { error: null };
         const { error } = await supabase.auth.signOut();
         return { error };
     }

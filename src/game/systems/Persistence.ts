@@ -147,7 +147,7 @@ export class Persistence {
     private async syncToCloud() {
         try {
             const user = authSystem.user;
-            if (!user) return;
+            if (!user || !supabase) return;
 
             const { error } = await supabase
                 .from('profiles')
@@ -165,7 +165,7 @@ export class Persistence {
 
     public async loadFromCloud() {
         const user = authSystem.user;
-        if (!user) return;
+        if (!user || !supabase) return;
 
         const { data, error } = await supabase
             .from('profiles')
@@ -415,7 +415,7 @@ export class Persistence {
     }
 
     public async submitScore(score: number, wave: number) {
-        if (!authSystem.isAuthenticated()) return;
+        if (!authSystem.isAuthenticated() || !supabase) return;
 
         // Only submit if it's a high score to prevent spam?
         // Actually, let's just submit specific milestones or end of game.
@@ -433,6 +433,8 @@ export class Persistence {
     }
 
     public async getLeaderboard(limit: number = 10): Promise<{ username: string | null; score: number; wave: number }[]> {
+        if (!supabase) return [];
+
         const { data, error } = await supabase
             .from('top_scores')
             .select('*')

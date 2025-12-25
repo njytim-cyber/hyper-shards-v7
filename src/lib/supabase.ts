@@ -1,11 +1,13 @@
-
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-    console.error('Missing Supabase credentials in .env file');
-}
+// Make Supabase optional - app works offline without credentials
+export const supabase: SupabaseClient | null = (supabaseUrl && supabaseAnonKey)
+    ? createClient(supabaseUrl, supabaseAnonKey)
+    : null;
 
-export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '');
+if (!supabase) {
+    console.warn('[Supabase] Running in offline mode - no credentials configured');
+}
