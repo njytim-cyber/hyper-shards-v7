@@ -101,7 +101,9 @@ export const DialogueDisplay: React.FC<DialogueDisplayProps> = () => {
                         flexShrink: 0
                     }}
                 >
-                    {dialogue.pilotIcon}
+                    <svg className="hud-icon" style={{ width: '30px', height: '30px', fill: dialogue.pilotColor }}>
+                        <use xlinkHref={`#icon-${dialogue.pilotIcon}`} />
+                    </svg>
                 </div>
 
                 <div className="dialogue-content">

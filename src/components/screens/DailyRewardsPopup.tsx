@@ -49,260 +49,107 @@ export const DailyRewardsPopup: React.FC<DailyRewardsPopupProps> = ({ onClose, o
     };
 
     return (
-        <div className="daily-rewards-popup">
-            <div className="daily-rewards-container">
-                <button className="close-btn" onClick={onClose}>✕</button>
+        <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            background: 'rgba(0,0,0,0.85)',
+            backdropFilter: 'blur(5px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000
+        }} className="screen-enter">
+            <div className="detail-panel" style={{ width: '90%', maxWidth: '600px', border: '2px solid #ffd700', padding: '30px', background: '#111' }}>
+                <button className="close-btn" style={{ position: 'absolute', top: '15px', right: '15px' }} onClick={onClose}>✕</button>
 
-                <h2>📅 DAILY REWARDS</h2>
+                <h2 className="screen-title" style={{ textAlign: 'center', color: '#ffd700', marginBottom: '20px', fontSize: '28px' }}>
+                    📅 DAILY REWARDS
+                </h2>
 
-                <div className="streak-display">
-                    <span className="streak-label">Current Streak:</span>
-                    <span className="streak-value">{currentStreak} Days</span>
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '15px',
+                    marginBottom: '20px',
+                    padding: '15px',
+                    background: 'rgba(255, 215, 0, 0.1)',
+                    borderRadius: '8px',
+                    border: '1px solid #ffd700'
+                }}>
+                    <span style={{ color: '#ccc' }}>Current Streak:</span>
+                    <span style={{ color: '#ffd700', fontSize: '24px', fontWeight: 'bold' }}>{currentStreak} Days</span>
                     {streakBonus > 1 && (
-                        <span className="streak-bonus">+{Math.round((streakBonus - 1) * 100)}% Bonus!</span>
+                        <span style={{ color: '#f80', fontWeight: 'bold', marginLeft: '10px' }}>+{Math.round((streakBonus - 1) * 100)}% Bonus!</span>
                     )}
                 </div>
 
-                <div className="rewards-grid">
+                <div className="feature-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
                     {DAILY_REWARDS.map((reward, i) => {
                         const dayNum = i + 1;
                         const isPast = dayNum < (currentStreak || 0);
                         const isCurrent = dayNum === (currentStreak || 0) + 1 && !claimed;
                         const isToday = dayNum === currentStreak && claimed;
+                        const isJackpot = dayNum === 7;
 
                         return (
                             <div
                                 key={i}
-                                className={`reward-day ${isPast || isToday ? 'claimed' : ''} ${isCurrent ? 'current' : ''} ${dayNum === 7 ? 'jackpot' : ''}`}
+                                className={`feature-card ${isCurrent ? 'selected' : ''}`}
+                                style={{
+                                    padding: '10px',
+                                    opacity: (isPast || isToday) ? 0.5 : 1,
+                                    borderColor: isCurrent ? '#ffd700' : (isJackpot ? '#f00' : '#444'),
+                                    background: isCurrent ? 'rgba(255,215,0,0.1)' : (isJackpot ? 'rgba(255,0,0,0.1)' : undefined),
+                                    gridColumn: isJackpot ? 'span 4' : 'span 1', // Make day 7 wide
+                                    alignItems: 'center'
+                                }}
                             >
-                                <div className="day-label">Day {dayNum}</div>
-                                <div className="day-reward">
-                                    <span className="reward-shards">{CURRENCY.symbol} {reward.shards}</span>
-                                    {reward.bonus && (
-                                        <span className="reward-bonus">
-                                            {reward.bonus.type === 'powerup' && `+${reward.bonus.value}`}
-                                            {reward.bonus.type === 'skill_point' && '+1 SP'}
-                                        </span>
-                                    )}
+                                <div style={{ fontSize: '10px', color: '#888', marginBottom: '5px', textTransform: 'uppercase' }}>Day {dayNum}</div>
+                                <div style={{ fontSize: '16px', color: '#0ff', fontWeight: 'bold' }}>
+                                    {CURRENCY.symbol} {reward.shards}
                                 </div>
-                                {(isPast || isToday) && <div className="claimed-check">✓</div>}
+                                {reward.bonus && (
+                                    <div style={{ fontSize: '11px', color: '#f80', marginTop: '4px' }}>
+                                        {reward.bonus.type === 'powerup' && `+${reward.bonus.value}`}
+                                        {reward.bonus.type === 'skill_point' && '+1 SKILL PT'}
+                                    </div>
+                                )}
+                                {(isPast || isToday) && <div style={{ color: '#0f0', position: 'absolute', top: '5px', right: '5px', fontWeight: 'bold' }}>✓</div>}
                             </div>
                         );
                     })}
                 </div>
 
                 {!claimed && canClaim && (
-                    <button className="claim-btn" onClick={handleClaim}>
-                        CLAIM TODAY'S REWARD!
+                    <button
+                        className="main-btn"
+                        onClick={handleClaim}
+                        style={{ width: '100%', marginTop: '25px', borderColor: '#ffd700', color: '#ffd700', fontSize: '18px', padding: '15px' }}
+                    >
+                        CLAIM REWARD
                     </button>
                 )}
 
                 {claimed && claimedReward && (
-                    <div className="claimed-message">
-                        <div className="claimed-amount">+{claimedReward.shards} {CURRENCY.symbol}</div>
-                        {claimedReward.bonus && <div className="claimed-bonus">{claimedReward.bonus}</div>}
-                        <div className="claimed-text">Come back tomorrow!</div>
+                    <div style={{ textAlign: 'center', marginTop: '20px', padding: '15px', background: 'rgba(0,255,255,0.05)', borderRadius: '8px' }}>
+                        <div style={{ fontSize: '14px', color: '#aaa', marginBottom: '5px' }}>REWARD CLAIMED!</div>
+                        <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#0ff' }}>+{claimedReward.shards} {CURRENCY.symbol}</div>
+                        {claimedReward.bonus && <div style={{ color: '#ffd700', fontWeight: 'bold', marginTop: '5px' }}>{claimedReward.bonus}</div>}
+                        <div style={{ color: '#888', fontSize: '12px', marginTop: '10px' }}>Come back tomorrow!</div>
                     </div>
                 )}
 
                 {!canClaim && !claimed && (
-                    <div className="already-claimed">
+                    <div style={{ textAlign: 'center', marginTop: '20px', color: '#888', padding: '15px' }}>
                         <div>Already claimed today!</div>
-                        <div className="next-claim">Next reward in: {getTimeUntilNextClaim()}</div>
+                        <div style={{ color: '#0ff', marginTop: '5px', fontSize: '14px' }}>Next reward in: {getTimeUntilNextClaim()}</div>
                     </div>
                 )}
             </div>
-
-            <style>{`
-                .daily-rewards-popup {
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    background: rgba(0,0,0,0.9);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    z-index: 600;
-                }
-                .daily-rewards-container {
-                    background: linear-gradient(135deg, #0a0a15 0%, #151530 100%);
-                    border: 2px solid #ffd700;
-                    border-radius: 20px;
-                    padding: 30px;
-                    max-width: 500px;
-                    width: 90%;
-                    position: relative;
-                    box-shadow: 0 0 50px rgba(255,215,0,0.2);
-                }
-                .close-btn {
-                    position: absolute;
-                    top: 15px;
-                    right: 15px;
-                    background: none;
-                    border: 1px solid #666;
-                    color: #666;
-                    width: 30px;
-                    height: 30px;
-                    border-radius: 50%;
-                    cursor: pointer;
-                    transition: all 0.3s;
-                }
-                .close-btn:hover {
-                    border-color: #f00;
-                    color: #f00;
-                }
-                h2 {
-                    text-align: center;
-                    color: #ffd700;
-                    margin: 0 0 20px 0;
-                    font-size: 24px;
-                    text-shadow: 0 0 20px rgba(255,215,0,0.5);
-                }
-                .streak-display {
-                    text-align: center;
-                    margin-bottom: 25px;
-                    padding: 15px;
-                    background: rgba(255,215,0,0.1);
-                    border-radius: 10px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    gap: 15px;
-                    flex-wrap: wrap;
-                }
-                .streak-label {
-                    color: #888;
-                }
-                .streak-value {
-                    color: #ffd700;
-                    font-size: 24px;
-                    font-weight: bold;
-                }
-                .streak-bonus {
-                    background: linear-gradient(90deg, #f80, #ffd700);
-                    -webkit-background-clip: text;
-                    -webkit-text-fill-color: transparent;
-                    font-weight: bold;
-                }
-                .rewards-grid {
-                    display: grid;
-                    grid-template-columns: repeat(7, 1fr);
-                    gap: 8px;
-                    margin-bottom: 25px;
-                }
-                @media (max-width: 500px) {
-                    .rewards-grid {
-                        grid-template-columns: repeat(4, 1fr);
-                    }
-                }
-                .reward-day {
-                    background: rgba(255,255,255,0.05);
-                    border: 1px solid #333;
-                    border-radius: 10px;
-                    padding: 10px 5px;
-                    text-align: center;
-                    transition: all 0.3s;
-                    position: relative;
-                }
-                .reward-day.claimed {
-                    opacity: 0.5;
-                    background: rgba(0,255,0,0.1);
-                    border-color: #0f0;
-                }
-                .reward-day.current {
-                    border-color: #ffd700;
-                    background: rgba(255,215,0,0.15);
-                    animation: pulseGold 1.5s infinite;
-                    transform: scale(1.05);
-                }
-                @keyframes pulseGold {
-                    0%, 100% { box-shadow: 0 0 10px rgba(255,215,0,0.3); }
-                    50% { box-shadow: 0 0 25px rgba(255,215,0,0.6); }
-                }
-                .reward-day.jackpot {
-                    background: linear-gradient(135deg, rgba(255,0,0,0.2), rgba(255,215,0,0.2));
-                    border-color: #f00;
-                }
-                .day-label {
-                    font-size: 10px;
-                    color: #666;
-                    margin-bottom: 5px;
-                }
-                .reward-shards {
-                    display: block;
-                    font-size: 14px;
-                    color: #0ff;
-                }
-                .reward-bonus {
-                    display: block;
-                    font-size: 10px;
-                    color: #f80;
-                    margin-top: 3px;
-                }
-                .claimed-check {
-                    position: absolute;
-                    top: 5px;
-                    right: 5px;
-                    color: #0f0;
-                    font-size: 12px;
-                }
-                .claim-btn {
-                    display: block;
-                    width: 100%;
-                    padding: 15px;
-                    font-size: 18px;
-                    font-weight: bold;
-                    background: linear-gradient(90deg, #ffd700, #f80);
-                    border: none;
-                    border-radius: 10px;
-                    color: #000;
-                    cursor: pointer;
-                    transition: all 0.3s;
-                    text-transform: uppercase;
-                    letter-spacing: 2px;
-                }
-                .claim-btn:hover {
-                    transform: scale(1.02);
-                    box-shadow: 0 0 30px rgba(255,215,0,0.5);
-                }
-                .claimed-message {
-                    text-align: center;
-                    padding: 20px;
-                    background: rgba(0,255,0,0.1);
-                    border-radius: 10px;
-                }
-                .claimed-amount {
-                    font-size: 36px;
-                    color: #0ff;
-                    font-weight: bold;
-                    margin-bottom: 10px;
-                    animation: popIn 0.5s ease-out;
-                }
-                @keyframes popIn {
-                    0% { transform: scale(0.5); opacity: 0; }
-                    100% { transform: scale(1); opacity: 1; }
-                }
-                .claimed-bonus {
-                    color: #ffd700;
-                    font-size: 18px;
-                    margin-bottom: 10px;
-                }
-                .claimed-text {
-                    color: #888;
-                    font-size: 14px;
-                }
-                .already-claimed {
-                    text-align: center;
-                    color: #888;
-                    padding: 15px;
-                }
-                .next-claim {
-                    color: #0ff;
-                    margin-top: 10px;
-                }
-            `}</style>
         </div>
     );
 };

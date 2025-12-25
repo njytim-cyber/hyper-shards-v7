@@ -1,0 +1,45 @@
+{
+    "menu": {
+        "start": "ARCADE MODE",
+        "campaign": "CAMPAIGN",
+        "shop": "SHOP",
+        "pilots": "PILOTS",
+        "achievements": "ACHIEVEMENTS",
+        "settings": "SETTINGS",
+        "profile": "PROFILE",
+        "multiplayer": "MULTIPLAYER",
+        "back": "BACK TO MENU",
+        "high_score": "HIGH SCORE"
+    },
+    "settings": {
+        "title": "SETTINGS",
+        "language": "LANGUAGE",
+        "volume_master": "MASTER VOLUME",
+        "volume_music": "MUSIC VOLUME",
+        "volume_sfx": "SFX VOLUME",
+        "fullscreen": "FULLSCREEN",
+        "on": "ON",
+        "off": "OFF"
+    },
+    "hud": {
+        "wave": "WAVE",
+        "tutorial": "TUTORIAL"
+    },
+    "game_over": {
+        "title": "GAME OVER",
+        "victory": "VICTORY!",
+        "score": "FINAL SCORE",
+        "restart": "RESTART",
+        "new_best": "NEW BEST!"
+    },
+    "multiplayer": {
+        "title": "MULTIPLAYER LOBBY",
+        "coop": "CO-OP MODE",
+        "versus": "VERSUS MODE",
+        "new": "NEW",
+        "join": "JOIN GAME",
+        "connecting": "CONNECTING...",
+        "connected": "CONNECTED!",
+        "room_id": "ENTER ROOM ID"
+    }
+}

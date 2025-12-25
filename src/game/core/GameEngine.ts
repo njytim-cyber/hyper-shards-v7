@@ -1,7 +1,9 @@
+import { VisualEffects } from '../systems/VisualEffects';
 import { audioSystem } from '../systems/AudioSystem';
 import { spriteCache } from '../systems/SpriteCache';
 import { persistence } from '../systems/Persistence';
 import { inputSystem } from '../systems/InputSystem';
+import { gamepadSystem } from '../systems/GamepadSystem';
 import { tutorialSystem } from '../systems/TutorialSystem';
 import { assistPilot } from '../systems/AssistPilot';
 import { showPilotDialogue } from '../../components/ui/DialogueDisplay';
@@ -19,8 +21,17 @@ import { Boss } from '../entities/Boss';
 import { SKIN_CONFIG } from '../config/ShopConfig';
 import { getBossForWave, MAX_WAVES, BOSS_CONFIG } from '../config/BossConfig';
 import { getCampaignLevel, type CampaignLevel } from '../config/CampaignConfig';
+import { MultiplayerBridge } from '../../bridges/MultiplayerBridge';
+import { RemoteShip } from '../entities/RemoteShip';
+import { AIOpponent, type AIDifficulty } from '../entities/AIOpponent';
+export type { AIDifficulty };
+import type { ChallengeModifier } from '../config/ChallengeModifiers';
 
-export type GameState = 'START' | 'PLAYING' | 'PAUSED' | 'GAMEOVER' | 'VICTORY';
+// Register gamepad system globally for InputSystem to access
+(globalThis as Record<string, unknown>).__gamepadSystem = gamepadSystem;
+
+export type GameState = 'START' | 'PLAYING' | 'PAUSED' | 'GAMEOVER' | 'VICTORY' | 'COUNTDOWN';
+export type GameMode = 'SOLO' | 'COOP' | 'VERSUS' | 'VS_PC';
 
 interface UICallbacks {
     onScoreUpdate: (score: number) => void;
@@ -33,6 +44,7 @@ interface UICallbacks {
     onCampaignComplete?: (levelId: number, stars: number, time: number, tookDamage: boolean, maxCombo: number) => void;
     onGameStart: () => void;
     onPause: (isPaused: boolean) => void;
+    onOpponentUpdate?: (lives: number, shields: number, id: string) => void;
 }
 
 export class GameEngine {
@@ -53,12 +65,14 @@ export class GameEngine {
     public wave: number = 1;
     public combo: number = 1;
     public comboTimer: number = 0;
+    public countdownTimer: number = 0;
 
     private lastTime: number = 0;
 
     private interestTimer: number = 0;
     private regenTimer: number = 0;
     private hasRevived: boolean = false;
+    private networkSyncCounter: number = 0;  // For throttled network sync
 
     // Campaign mode tracking
     private campaignLevel: CampaignLevel | null = null;
@@ -70,14 +84,41 @@ export class GameEngine {
     private bulletPool: Pool<Bullet>;
     private particlePool: Pool<Particle>;
     private textPool: Pool<FloatingText>;
-    private spatialGrid: SpatialGrid<{ x: number; y: number; radius: number; ref: Asteroid }>; // Wrapper for grid queries
-
+    private spatialGrid: SpatialGrid<{ x: number; y: number; radius: number; ref: Asteroid }>;
     private uiCallbacks: UICallbacks | null = null;
+    public visualEffects: VisualEffects;
+    public multiplayerBridge: MultiplayerBridge;
+    public remotePlayers: Map<string, RemoteShip> = new Map();
 
     // Funny texts
     private funnyWaveIntros = ["INITIALIZING SYSTEMS...", "HYPERSPACE ENGAGED", "ASTEROID FIELD AHEAD", "DON'T BLINK", "STAY SHARP PILOT", "MORE ROCKS? REALLY?", "CLEAN UP ON AISLE 5", "THEY SEE ME ROLLIN'", "WATCH YOUR SIX", "INCOMING SPACE TRASH", "PIZZA DELIVERY IS LATE"];
     private funnyBossIntros = ["WARNING: DREADNOUGHT DETECTED", "BOSS APPROACHING", "WARNING: BIG SHIP ENERGY", "OH NO, IT'S THE MANAGER", "GIANT ENEMY CRAB... WAIT", "PREPARE FOR TROUBLE", "LEVEL 9000 BOSS DETECTED", "IT'S BOSS O'CLOCK"];
     private hints = ["Tip: Use SHIFT to DASH.", "Tip: Heavy ammo pierces.", "Tip: Upgrades are permanent.", "Tip: Nukes clear screen.", "Tip: Collect SHARDS.", "Tip: Kill fast for combos."];
+
+    // Pre-bound callbacks to avoid allocations per frame
+    private cachedCallbacks: {
+        spawnBullet: (b: Bullet) => void;
+        spawnParticle: (x: number, y: number, color: string) => void;
+        spawnText: (x: number, y: number, text: string, color: string) => void;
+        updateWeaponUI: (weapon: string) => void;
+        updateHUD: () => void;
+        gameOver: () => void;
+    } | null = null;
+
+    public remoteScore: number = 0;
+    public totalScore: number = 0; // Local + Remote
+    public gameMode: GameMode = 'SOLO';
+
+    // Challenge Modifiers
+    public globalSpeedMultiplier: number = 1.0;
+    public damageMultiplier: number = 1.0;
+    public shieldsDisabled: boolean = false;
+    public spawnRateMultiplier: number = 1.0;
+    public enemyScaleMultiplier: number = 1.0;
+
+    // VS PC Mode
+    public aiOpponent: AIOpponent | null = null;
+    public aiDifficulty: AIDifficulty = 'NORMAL';
 
     constructor() {
         this.bulletPool = new Pool(() => new Bullet(), (b, x, y, a, t, d, p, s, h) => b.init(x, y, a, t, d, p, s, h));
@@ -85,6 +126,54 @@ export class GameEngine {
         this.textPool = new Pool(() => new FloatingText(), (t, x, y, txt, c) => t.init(x, y, txt, c));
         // Initialize with a reasonable cell size (e.g., 100px)
         this.spatialGrid = new SpatialGrid(2000, 2000, 100);
+        this.visualEffects = new VisualEffects(this);
+
+        this.multiplayerBridge = new MultiplayerBridge('https://hyper-shards-server.fly.dev');
+        this.multiplayerBridge.onPlayerUpdate = (state) => {
+            if (!this.remotePlayers.has(state.id)) {
+                this.remotePlayers.set(state.id, new RemoteShip(state.id));
+                this.spawnText(this.canvas!.width / 2, 100, "PLAYER 2 JOINED", "#0f0");
+                audioSystem.playPowerUp();
+            }
+            this.remotePlayers.get(state.id)?.updateState(state);
+
+            // Should optimize: only trigger UI update if values changed or throttled
+            // For now, simple direct update
+            if (state.id !== this.multiplayerBridge.getPlayerId()) { // Double check we aren't updating self (bridge filters too)
+                this.uiCallbacks?.onOpponentUpdate?.(state.health, state.shield, state.id);
+            }
+        };
+        this.multiplayerBridge.onPlayerLeft = (id) => {
+            this.remotePlayers.delete(id);
+            this.spawnText(this.canvas!.width / 2, 100, "PLAYER 2 DISCONNECTED", "#f00");
+        };
+        this.multiplayerBridge.onScoreUpdate = (_id, score) => {
+            this.remoteScore = score;
+            // Update UI/Total immediately?
+        };
+        this.multiplayerBridge.onReviveRequest = (from, target) => {
+            void from; void target;  // Reserved for future revive UI
+            if (this.ship && !this.ship.dead) {
+                this.spawnText(this.ship.x, this.ship.y - 60, "REVIVE REQUEST!", "#ff0");
+                // TODO: Show beacon logic
+            }
+        };
+        this.multiplayerBridge.onGameOver = (id) => {
+            void id;  // Reserved for player-specific UI
+            this.spawnText(this.canvas!.width / 2, 100, "PLAYER 2 FALLEN!", "#f00");
+            if (this.lives <= 0) {
+                this.gameState = 'GAMEOVER';
+                audioSystem.playMusic('load');
+            }
+        };
+        this.multiplayerBridge.onHazardReceived = (_from, _type, intensity) => {
+            this.spawnText(this.ship?.x || 0, (this.ship?.y || 0) - 80, "INCOMING HAZARD!", "#f00");
+            audioSystem.playExplosion('boss');
+            const count = 3 * intensity;
+            for (let i = 0; i < count; i++) {
+                this.asteroids.push(new Asteroid(undefined, undefined, 'large', this.canvas!.width, this.canvas!.height));
+            }
+        };
     }
 
     public init(canvas: HTMLCanvasElement, callbacks: UICallbacks) {
@@ -145,8 +234,15 @@ export class GameEngine {
         }
     }
 
-    public startGame() {
+    public startGame(modifiers: ChallengeModifier[] = []) {
         if (!this.canvas) return;
+
+        // Reset defaults first
+        this.globalSpeedMultiplier = 1.0;
+        this.damageMultiplier = 1.0;
+        this.shieldsDisabled = false;
+        this.spawnRateMultiplier = 1.0;
+        this.enemyScaleMultiplier = 1.0;
 
         this.score = 0;
         if ((persistence.profile.upgrades.start || 0) > 0) {
@@ -156,6 +252,19 @@ export class GameEngine {
         } else {
             this.wave = 1;
         }
+
+        // If restarting in VS_PC mode, delegate to startVsPC to ensure AI is initialized
+        if (this.gameMode === 'VS_PC') {
+            this.startVsPC(this.aiDifficulty);
+            return;
+        }
+
+        // Apply Modifiers
+
+        // Apply Modifiers
+        modifiers.forEach(mod => {
+            if (mod.apply) mod.apply(this);
+        });
 
         // CRITICAL: Set gameState to 'PLAYING' so the game loop runs!
         this.gameState = 'PLAYING';
@@ -169,6 +278,17 @@ export class GameEngine {
 
         this.lives = this.ship.maxLives;
         this.hasRevived = false;
+        this.networkSyncCounter = 0;
+
+        // Cache bound callbacks to avoid per-frame allocations
+        this.cachedCallbacks = {
+            spawnBullet: this.spawnBullet.bind(this),
+            spawnParticle: this.spawnParticle.bind(this),
+            spawnText: this.spawnText.bind(this),
+            updateWeaponUI: (t: string) => this.uiCallbacks?.onWeaponUpdate(t),
+            updateHUD: this.updateHUD.bind(this),
+            gameOver: this.gameOver.bind(this)
+        };
 
         this.bullets = [];
         this.asteroids = [];
@@ -176,8 +296,15 @@ export class GameEngine {
         if (this.wave === 1) {
             // Reset ship with no invincibility for tutorial so it's always visible
             this.ship.reset(this.canvas.width, this.canvas.height, 0);
-            tutorialSystem.start();
-            this.uiCallbacks?.onWaveUpdate(1, "TUTORIAL", "Follow instructions", false);
+
+            // ONLY start tutorial in SOLO mode
+            if (this.gameMode === 'SOLO') {
+                tutorialSystem.start();
+                this.uiCallbacks?.onWaveUpdate(1, "TUTORIAL", "Follow instructions", false);
+            } else {
+                // For PvP/Co-op, just show Wave 1
+                this.uiCallbacks?.onWaveUpdate(1, "WAVE 1", "Destroy the enemy!", false);
+            }
             // Tutorial system will spawn asteroid when needed (at shoot step)
         } else {
             // Reset ship with normal invincibility
@@ -232,6 +359,77 @@ export class GameEngine {
         }, 1500);
 
         audioSystem.playMusic('wave');
+    }
+
+    // Start VS PC mode - player vs AI opponent
+    public startVsPC(difficulty: AIDifficulty = 'NORMAL') {
+        if (!this.canvas) return;
+
+        this.gameMode = 'VS_PC';
+        this.aiDifficulty = difficulty;
+        this.score = 0;
+        this.wave = 1;
+        this.gameState = 'COUNTDOWN';
+        this.countdownTimer = 3;
+
+        // Create player ship
+        this.ship = new Ship(this.bulletPool);
+        const skinKey = persistence.profile.equippedSkin || 'default';
+        const skinData = SKIN_CONFIG[skinKey];
+        if (skinData) this.ship.skin = skinData;
+
+        this.lives = this.ship.maxLives;
+        this.hasRevived = false;
+
+        // Create AI opponent
+        this.aiOpponent = new AIOpponent(this.bulletPool, difficulty);
+        this.aiOpponent.reset(this.canvas.width, this.canvas.height);
+
+        // Explicitly disable tutorial
+        tutorialSystem.end();
+
+        // Cache callbacks
+        this.cachedCallbacks = {
+            spawnBullet: this.spawnBullet.bind(this),
+            spawnParticle: this.spawnParticle.bind(this),
+            spawnText: this.spawnText.bind(this),
+            updateWeaponUI: (t: string) => this.uiCallbacks?.onWeaponUpdate(t),
+            updateHUD: this.updateHUD.bind(this),
+            gameOver: this.gameOver.bind(this)
+        };
+
+        this.bullets = [];
+        this.asteroids = [];
+        this.particles = [];
+        this.floatingTexts = [];
+        this.powerups = [];
+        this.boss = null;
+
+        // Position player at bottom
+        this.ship.reset(this.canvas.width, this.canvas.height);
+        this.ship.y = this.canvas.height * 0.85;
+        this.ship.angle = -Math.PI / 2;  // Face up
+
+        // Spawn some asteroids for both to compete over
+        this.spawnVsPCWave();
+
+        this.uiCallbacks?.onWaveUpdate(1, "GET READY", "3", false);
+        // audioSystem.playMusic('wave'); // Play music after countdown
+    }
+
+    private spawnVsPCWave() {
+        if (!this.canvas) return;
+
+        // Spawn asteroids spread across the middle of the screen
+        const count = 8 + this.wave * 2;
+        Asteroid.currentWave = this.wave;
+
+        for (let i = 0; i < count; i++) {
+            const x = Math.random() * this.canvas.width;
+            const y = this.canvas.height * 0.3 + Math.random() * this.canvas.height * 0.4;
+            const ast = new Asteroid(x, y, 'large', this.canvas.width, this.canvas.height);
+            this.asteroids.push(ast);
+        }
     }
 
     // Spawn wave for campaign mode with modifiers
@@ -310,7 +508,7 @@ export class GameEngine {
     }
 
     public togglePause() {
-        if (this.gameState === 'PLAYING') {
+        if (this.gameState === 'PLAYING' || this.gameState === 'COUNTDOWN') {
             this.gameState = 'PAUSED';
             audioSystem.pauseMusic();
             if (tutorialSystem.active) tutorialSystem.checkPause();
@@ -427,10 +625,34 @@ export class GameEngine {
     private loop(timestamp: number) {
         requestAnimationFrame(this.loop.bind(this));
 
-        if (this.gameState !== 'PLAYING') return;
+        if (this.gameState !== 'PLAYING' && this.gameState !== 'COUNTDOWN') return;
         if (!this.lastTime) this.lastTime = timestamp;
         const dt = Math.min((timestamp - this.lastTime) / 1000, 0.1);
         this.lastTime = timestamp;
+
+        if (this.gameState === 'COUNTDOWN') {
+            this.countdownTimer -= dt;
+            // Update UI with countdown (ceil for 3, 2, 1)
+            const count = Math.ceil(this.countdownTimer);
+            if (this.uiCallbacks?.onWaveUpdate) {
+                // Reuse wave update callback to show big text
+                if (count > 0) {
+                    this.uiCallbacks.onWaveUpdate(1, "GET READY", count.toString(), false);
+                } else {
+                    this.uiCallbacks.onWaveUpdate(1, "GO!", "", false);
+                }
+            }
+
+            if (this.countdownTimer <= 0) {
+                this.gameState = 'PLAYING';
+                this.uiCallbacks?.onWaveUpdate(1, `VS ${this.aiDifficulty} AI`, 'Outscore your opponent!', false);
+                audioSystem.playMusic('wave');
+            } else {
+                // Don't update game logic during countdown, but DRAW everything
+                this.draw();
+                return;
+            }
+        }
 
         this.update(dt);
         this.draw();
@@ -438,6 +660,8 @@ export class GameEngine {
 
     private update(dt: number) {
         if (!this.canvas || !this.ship) return;
+
+        this.visualEffects.update(dt);
 
         // Regen
         if ((persistence.profile.upgrades.regen || 0) > 0 && this.lives < this.ship.maxLives) {
@@ -488,19 +712,35 @@ export class GameEngine {
             );
         }
 
-        // Entities
-        this.ship.update(dt, inputSystem.keys, inputSystem.touchSticks, this.canvas.width, this.canvas.height, {
-            spawnBullet: this.spawnBullet.bind(this),
-            spawnParticle: this.spawnParticle.bind(this),
-            spawnText: this.spawnText.bind(this),
-            updateWeaponUI: (t) => this.uiCallbacks?.onWeaponUpdate(t),
-            updateHUD: this.updateHUD.bind(this),
-            gameOver: this.gameOver.bind(this)
-        }, this.combo);
+        // Entities - use cached callbacks to avoid per-frame allocations
+        this.ship.update(dt, inputSystem.keys, inputSystem.touchSticks, this.canvas.width, this.canvas.height,
+            this.cachedCallbacks!, this.combo);
 
         if (tutorialSystem.active) {
             tutorialSystem.checkMove(this.ship.x, this.ship.y);
             tutorialSystem.checkRotate(this.ship.angle);
+        }
+
+        // AI Opponent update (VS PC mode)
+        if (this.gameMode === 'VS_PC' && this.aiOpponent && !this.aiOpponent.dead) {
+            const aiCallbacks = {
+                spawnBullet: this.spawnBullet.bind(this),
+                spawnParticle: this.spawnParticle.bind(this),
+                spawnText: this.spawnText.bind(this)
+            };
+            this.aiOpponent.update(
+                dt,
+                this.canvas.width,
+                this.canvas.height,
+                this.ship.x,
+                this.ship.y,
+                this.asteroids.map(a => ({ x: a.x, y: a.y, r: a.r })),
+                aiCallbacks
+            );
+
+            // Sync AI stats to local HUD
+            this.uiCallbacks?.onOpponentUpdate?.(this.aiOpponent.lives, this.aiOpponent.shields, 'AI_BOT');
+
         }
 
         for (let i = this.bullets.length - 1; i >= 0; i--) {
@@ -511,11 +751,6 @@ export class GameEngine {
                 // Swap and Pop
                 this.bullets[i] = this.bullets[this.bullets.length - 1];
                 this.bullets.pop();
-                // Since we iterate backwards, we don't need to decrement i?
-                // Wait, if we swap the last element to position i, we have already processed the last element (since we go backwards).
-                // So the swapped element HAS been processed.
-                // So we don't need to re-process it.
-                // Correct.
                 continue;
             }
         }
@@ -634,8 +869,6 @@ export class GameEngine {
         // 1. Clear and Populate Grid
         this.spatialGrid.clear();
         for (const a of this.asteroids) {
-            // Asteroid needs to satisfy SpatialObject interface
-            // Assuming Asteroid has x, y, r (radius)
             this.spatialGrid.insert({ x: a.x, y: a.y, radius: a.r, ref: a });
         }
 
@@ -668,6 +901,7 @@ export class GameEngine {
                     if (d < 3600) { // Boss radius approx 60
                         this.boss.hp -= b.damage;
                         b.active = false;
+                        this.visualEffects.explosion(b.x, b.y, '#fa0', 5); // Small spark on hit
                         if (this.boss.hp <= 0) {
                             this.boss.dead = true;
                             audioSystem.playExplosion('large');
@@ -678,11 +912,37 @@ export class GameEngine {
                     }
                 }
 
+                // Player bullets vs AI Opponent
+                if (this.gameMode === 'VS_PC' && this.aiOpponent && !this.aiOpponent.dead) {
+                    const d = (b.x - this.aiOpponent.x) ** 2 + (b.y - this.aiOpponent.y) ** 2;
+                    if (d < (this.aiOpponent.radius + b.radius) ** 2) {
+                        b.active = false;
+                        this.visualEffects.explosion(b.x, b.y, '#f55', 5);
+
+                        // AI hit logic
+                        const aiCallbacks = {
+                            spawnBullet: this.spawnBullet.bind(this),
+                            spawnParticle: this.spawnParticle.bind(this),
+                            spawnText: this.spawnText.bind(this)
+                        };
+
+                        if (this.aiOpponent.hit(aiCallbacks)) {
+                            // Hit was successful (shield handling done in hit())
+                            this.aiOpponent.die(aiCallbacks);
+                            if (this.aiOpponent.dead) {
+                                this.victory(); // Or round win logic
+                            }
+                        }
+
+                        this.uiCallbacks?.onOpponentUpdate?.(this.aiOpponent.lives, this.aiOpponent.shields, 'AI_BOT');
+                        continue;
+                    }
+                }
+
                 // Player bullets vs Asteroids (Grid Query)
                 this.spatialGrid.query(b.x, b.y, b.radius, (item) => {
                     if (!b.active) return; // Bullet might have died in previous callback
                     const a = item.ref;
-                    // Double check distance (broad phase -> narrow phase)
                     const d = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
                     if (d < (a.r + b.radius) ** 2) {
                         a.hit(b.damage, b.vx, b.vy, this.getGameCallbacks(), this.asteroids, this.combo);
@@ -712,6 +972,27 @@ export class GameEngine {
                 this.floatingTexts.pop();
             }
         }
+
+        // Multiplayer Updates
+        this.remotePlayers.forEach(p => p.update(dt));
+
+        if (this.ship && !this.ship.dead) {
+            this.multiplayerBridge.sendPlayerState({
+                x: this.ship.x,
+                y: this.ship.y,
+                rotation: this.ship.angle,
+                velocity: { x: this.ship.vx, y: this.ship.vy },
+                isFiring: inputSystem.keys.Space || false, // Simplify
+                health: this.lives,
+                shield: this.ship.shields
+            });
+            // Sync score every ~20 frames (~3 times per second at 60fps)
+            this.networkSyncCounter++;
+            if (this.score > 0 && this.networkSyncCounter >= 20) {
+                this.multiplayerBridge.sendScore(this.score);
+                this.networkSyncCounter = 0;
+            }
+        }
     }
 
     private draw() {
@@ -720,23 +1001,46 @@ export class GameEngine {
         this.ctx.fillStyle = '#050505';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-        this.ship?.draw(this.ctx);
-        assistPilot.draw(this.ctx);  // Draw assist pilot
+        this.ctx.save();
+        this.visualEffects.applyTransform(this.ctx);
 
-        // Use indexed for loops instead of forEach for better JIT optimization
+        this.ship?.draw(this.ctx);
+        assistPilot.draw(this.ctx);
+
         for (let i = 0; i < this.bullets.length; i++) this.bullets[i].draw(this.ctx);
         this.boss?.draw(this.ctx);
         for (let i = 0; i < this.asteroids.length; i++) this.asteroids[i].draw(this.ctx);
         for (let i = 0; i < this.powerups.length; i++) this.powerups[i].draw(this.ctx);
+
+        // Draw remote players
+        this.remotePlayers.forEach(p => p.draw(this.ctx!));
+
+        // Draw AI opponent (VS PC mode)
+        if (this.gameMode === 'VS_PC' && this.aiOpponent) {
+            this.aiOpponent.draw(this.ctx);
+        }
+
+        // Draw particles last (on top) inside shake
         for (let i = 0; i < this.particles.length; i++) this.particles[i].draw(this.ctx);
+
+        this.ctx.restore();
+
+        this.ctx.save();
+        this.visualEffects.applyTransform(this.ctx);
         for (let i = 0; i < this.floatingTexts.length; i++) this.floatingTexts[i].draw(this.ctx);
+        this.ctx.restore();
+
+        // Hit Flash Overlay
+        this.visualEffects.drawFlash(this.ctx, this.canvas.width, this.canvas.height);
     }
 
     private handlePlayerHit() {
         this.lives--;
         this.combo = 1;
-        this.campaignTookDamage = true;  // Track for campaign objectives
+        this.campaignTookDamage = true;
         this.updateHUD();
+        this.visualEffects.shake(20); // Stronger shake
+        this.visualEffects.triggerFlash(0.2, '#f00'); // Red flash
         const invTime = 2.0 + ((persistence.profile.upgrades.shieldDur || 0) * 0.5);
         if (this.ship) {
             this.ship.reset(this.canvas!.width, this.canvas!.height, invTime);
@@ -745,20 +1049,23 @@ export class GameEngine {
 
         // Nova Logic
         if ((persistence.profile.upgrades.nova || 0) > 0) {
+            this.visualEffects.triggerFlash(0.5, '#fff'); // White flash for Nova
             this.asteroids.forEach(a => {
-                a.hp -= 5; // Massive damage
+                a.hp -= 5;
                 if (a.hp <= 0) a.break(this.getGameCallbacks(), this.asteroids, this.combo);
             });
             if (this.boss) {
                 this.boss.hp -= 50;
+                this.visualEffects.explosion(this.boss.x, this.boss.y, '#f00', 30);
                 if (this.boss.hp <= 0) {
                     this.boss.dead = true;
                     persistence.addShards(100);
                     audioSystem.playExplosion('large');
                     audioSystem.playMusic('wave');
+                    this.visualEffects.triggerFlash(1.0, '#fff'); // Big flash for boss death
                 }
             }
-            audioSystem.playNuke(); // Reuse Nuke sound
+            audioSystem.playNuke();
             this.spawnText(this.ship!.x, this.ship!.y - 40, "NOVA!", "#f00");
         }
 
@@ -766,6 +1073,10 @@ export class GameEngine {
     }
 
     private gameOver() {
+        // Co-op Logic: If in Co-op mode, don't game over immediately unless all players are dead.
+        // For now, assume simple local check or external mode flag.
+        // If we are "dead", we become a ghost.
+
         if ((persistence.profile.upgrades.revive || 0) > 0 && !this.hasRevived) {
             this.hasRevived = true;
             this.lives = this.ship!.maxLives;
@@ -776,6 +1087,10 @@ export class GameEngine {
             this.spawnText(this.ship!.x, this.ship!.y - 40, "SYSTEM RESTORED", "#0ff");
             return;
         }
+
+        // Broadcast death in multiplayer
+        this.multiplayerBridge.sendGameOver();
+
         this.gameState = 'GAMEOVER';
         audioSystem.playMusic('load');
 
@@ -879,12 +1194,12 @@ export class GameEngine {
         this.uiCallbacks?.onComboUpdate(this.combo, 0);
     }
 
-    private spawnBullet(b: Bullet) {
+    public spawnBullet(b: Bullet) {
         this.bullets.push(b);
         if (tutorialSystem.active) tutorialSystem.checkShoot();
     }
-    private spawnParticle(x: number, y: number, c: string) { this.particles.push(this.particlePool.get(x, y, c)); }
-    private spawnText(x: number, y: number, t: string, c: string) { this.floatingTexts.push(this.textPool.get(x, y, t, c)); }
+    public spawnParticle(x: number, y: number, c: string) { this.particles.push(this.particlePool.get(x, y, c)); }
+    public spawnText(x: number, y: number, t: string, c: string) { this.floatingTexts.push(this.textPool.get(x, y, t, c)); }
 
     private getGameCallbacks() {
         return {
@@ -902,6 +1217,15 @@ export class GameEngine {
                 this.combo++;
                 this.comboTimer = 2.5 + ((persistence.profile.upgrades.combo || 0) * 0.5);
                 audioSystem.playComboUp(this.combo);
+                this.visualEffects.triggerComboPulse(this.combo);
+
+                if (this.gameMode === 'VERSUS' && this.combo > 1 && this.combo % 10 === 0) {
+                    this.spawnText(this.ship?.x || 0, (this.ship?.y || 0) - 60, "COMBO ATTACK SENT!", "#0f0");
+                    this.multiplayerBridge.sendHazard('asteroid_rain', 1);
+                }
+            },
+            explosion: (x: number, y: number, color: string, count: number) => {
+                this.visualEffects.explosion(x, y, color, count);
             }
         };
     }

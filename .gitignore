@@ -9,6 +9,13 @@ test-results/
 # Test outputs
 *_output*.txt
 
+# Debug/lint dumps (root rot prevention)
+error_dump.txt
+eslint*.json
+eslint*.txt
+lint*.txt
+legacy/
+
 # IDE
 .idea/
 *.swp

@@ -113,17 +113,84 @@ const DEFAULT_PROFILE: UserProfile = {
     lastPlayDate: null
 };
 
+import { supabase } from '../../lib/supabase';
+import { authSystem } from './AuthSystem';
+
 export class Persistence {
     public profile: UserProfile = { ...DEFAULT_PROFILE };
+    private syncPending: boolean = false;
 
     constructor() {
         this.load();
+
+        // Listen for auth changes to sync
+        window.addEventListener('auth-changed', async () => {
+            if (authSystem.isAuthenticated()) {
+                await this.loadFromCloud();
+                this.save(); // Force sync up after merge
+            }
+        });
     }
 
     public save() {
         this.profile.lastPlayDate = new Date().toISOString();
         localStorage.setItem('hyperShardsProfile', JSON.stringify(this.profile));
         window.dispatchEvent(new CustomEvent('profile-updated', { detail: this.profile }));
+
+        // Debounced cloud sync
+        if (authSystem.isAuthenticated() && !this.syncPending) {
+            this.syncPending = true;
+            setTimeout(() => this.syncToCloud(), 2000);
+        }
+    }
+
+    private async syncToCloud() {
+        try {
+            const user = authSystem.user;
+            if (!user) return;
+
+            const { error } = await supabase
+                .from('profiles')
+                .upsert({
+                    id: user.id,
+                    updated_at: new Date().toISOString(),
+                    data: this.profile
+                });
+
+            if (error) console.error('Cloud save failed:', error);
+        } finally {
+            this.syncPending = false;
+        }
+    }
+
+    public async loadFromCloud() {
+        const user = authSystem.user;
+        if (!user) return;
+
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('data, updated_at')
+            .eq('id', user.id)
+            .single();
+
+        if (error) {
+            console.warn('Cloud load error (new user?):', error);
+            return;
+        }
+
+        if (data && data.data) {
+            // Simple conflict resolution: Cloud wins if newer (or we assume cloud is source of truth on login)
+            // Implementation: deep merge, favoring higher values for accumulations
+            // For now, just taking cloud data as it's likely a fresh login
+            console.log('Loaded cloud save:', data.updated_at);
+            const cloudProfile = data.data as UserProfile;
+
+            // Merge logic could be complex. For now, simple override if cloud is valid.
+            if (cloudProfile.totalGamesPlayed > this.profile.totalGamesPlayed) {
+                this.profile = { ...this.profile, ...cloudProfile };
+                this.save(); // Save merged back to local
+            }
+        }
     }
 
     public load() {
@@ -229,6 +296,25 @@ export class Persistence {
         this.save();
     }
 
+    public purchaseUpgrade(upgradeId: string, cost: number): boolean {
+        if (this.profile.shards >= cost) {
+            this.profile.shards -= cost;
+            const currentLevel = this.profile.upgrades[upgradeId] || 0;
+            this.profile.upgrades[upgradeId] = currentLevel + 1;
+            this.save();
+            return true;
+        }
+        return false;
+    }
+
+    public equipSkin(skinId: string) {
+        // Verify ownership if needed, for now assuming UI checks it
+        if (this.profile.unlockedSkins.includes(skinId)) {
+            this.profile.equippedSkin = skinId;
+            this.save();
+        }
+    }
+
     // Campaign Methods
     public addGems(amount: number) {
         this.profile.gems += amount;
@@ -326,6 +412,37 @@ export class Persistence {
 
     public getCampaignStars(): number {
         return Object.values(this.profile.campaign.levelStars).reduce((a, b) => a + b, 0);
+    }
+
+    public async submitScore(score: number, wave: number) {
+        if (!authSystem.isAuthenticated()) return;
+
+        // Only submit if it's a high score to prevent spam?
+        // Actually, let's just submit specific milestones or end of game.
+
+        const { error } = await supabase
+            .from('leaderboards')
+            .insert({
+                user_id: authSystem.user!.id,
+                score,
+                wave,
+                pilot_id: this.profile.selectedPilot
+            });
+
+        if (error) console.error('Score submission failed:', error);
+    }
+
+    public async getLeaderboard(limit: number = 10): Promise<{ username: string | null; score: number; wave: number }[]> {
+        const { data, error } = await supabase
+            .from('top_scores')
+            .select('*')
+            .limit(limit);
+
+        if (error) {
+            console.error('Leaderboard fetch failed:', error);
+            return [];
+        }
+        return data || [];
     }
 
     public reset() {

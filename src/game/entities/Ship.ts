@@ -64,6 +64,7 @@ export class Ship {
     public isDashing: boolean = false;
     public dashTime: number = 0;
     public lastShot: number = 0;
+    public scale: number = 1;  // For challenge modifiers
 
     private bulletPool: Pool<Bullet>;
     constructor(bulletPool: Pool<Bullet>) {

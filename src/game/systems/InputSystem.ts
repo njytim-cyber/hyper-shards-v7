@@ -109,6 +109,43 @@ export class InputSystem {
         canvas.addEventListener('touchend', endTouch);
         canvas.addEventListener('touchcancel', endTouch);
     }
+
+    /**
+     * Get unified movement vector from keyboard, touch, or gamepad.
+     * Returns normalized direction for Ship movement.
+     */
+    public getMovementVector(): { x: number; y: number } {
+        // Priority: Touch > Gamepad > Keyboard
+        if (this.touchSticks.left.active) {
+            return { x: this.touchSticks.left.vecX, y: this.touchSticks.left.vecY };
+        }
+
+        // Import gamepad dynamically to avoid circular dependency
+        const gp = (globalThis as Record<string, unknown>).__gamepadSystem as { isConnected: () => boolean; getMovementVector: () => { x: number; y: number } } | undefined;
+        if (gp && gp.isConnected()) {
+            const vec = gp.getMovementVector();
+            if (vec.x !== 0 || vec.y !== 0) return vec;
+        }
+
+        // Keyboard fallback
+        let x = 0, y = 0;
+        if (this.keys.w || this.keys.ArrowUp) y -= 1;
+        if (this.keys.s || this.keys.ArrowDown) y += 1;
+        if (this.keys.a || this.keys.ArrowLeft) x -= 1;
+        if (this.keys.d || this.keys.ArrowRight) x += 1;
+        return { x, y };
+    }
+
+    /**
+     * Check if fire is active (any input source).
+     */
+    public isFiring(): boolean {
+        if (this.mouse.down) return true;
+        if (this.touchSticks.right.active) return true;
+        const gp = (globalThis as Record<string, unknown>).__gamepadSystem as { isFiring: () => boolean } | undefined;
+        if (gp && gp.isFiring()) return true;
+        return false;
+    }
 }
 
 export const inputSystem = new InputSystem();

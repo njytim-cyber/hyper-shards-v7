@@ -9,6 +9,8 @@ interface HUDProps {
     onPause: () => void;
     showWave?: boolean;
     wave: number; // Keep wave as prop for structural visibility changes, or ref it too? Wave changes rarely.
+    opponentLives?: number;
+    opponentShields?: number;
 }
 
 // Sub-components (No React.memo, relying on React Compiler)
@@ -64,7 +66,7 @@ const MobileControls = () => (
     </>
 );
 
-export const HUD: React.FC<HUDProps> = ({ lives, shields, weapon, shards, onPause, showWave = true, wave }) => {
+export const HUD: React.FC<HUDProps> = ({ lives, shields, weapon, shards, onPause, showWave = true, wave, opponentLives, opponentShields }) => {
     // Refs for high-frequency updates
     const scoreRef = useRef<HTMLSpanElement>(null);
     const comboValRef = useRef<HTMLSpanElement>(null);
@@ -137,6 +139,19 @@ export const HUD: React.FC<HUDProps> = ({ lives, shields, weapon, shards, onPaus
 
                 <div className="hud-right">
                     <div id="desktop-controls">
+                        {opponentLives !== undefined && (
+                            <div className="opponent-stats" style={{ marginBottom: '10px', textAlign: 'right' }}>
+                                <div style={{ fontSize: '10px', color: '#ff00ff', fontWeight: 'bold' }}>OPPONENT</div>
+                                <div>
+                                    {Array.from({ length: Math.min(opponentLives, 5) }).map((_, i) => (
+                                        <svg key={`opp-life-${i}`} className="hud-icon life-heart" style={{ width: '12px', height: '12px', opacity: 1, fill: '#ff00ff' }}><use xlinkHref="#icon-heart" /></svg>
+                                    ))}
+                                    {Array.from({ length: Math.min(opponentShields || 0, 5) }).map((_, i) => (
+                                        <svg key={`opp-shield-${i}`} className="hud-icon shield-pip" style={{ width: '12px', height: '12px', opacity: 0.7 }}><use xlinkHref="#icon-shield-hud" /></svg>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                         <div id="dash-container">
                             <div style={{ textAlign: 'center', fontSize: '10px', color: '#0ff', fontWeight: 'bold', width: '100%' }}>DASH (SHIFT)</div>
                             <div id="dash-indicator"><div id="dash-fill"></div></div>

@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { HUD } from './components/ui/HUD';
 import { StartScreen } from './components/screens/StartScreen';
@@ -9,6 +10,10 @@ import { AchievementsScreen } from './components/screens/AchievementsScreen';
 import { DailyRewardsPopup } from './components/screens/DailyRewardsPopup';
 import { PilotSelectScreen } from './components/screens/PilotSelectScreen';
 import { CampaignScreen } from './components/screens/CampaignScreen';
+import { SettingsScreen } from './components/screens/SettingsScreen';
+import { MatchmakingScreen } from './components/screens/MatchmakingScreen';
+import { ChallengeScreen } from './components/screens/ChallengeScreen';
+import { AuthScreen } from './components/screens/AuthScreen';
 import { gameEngine, GameEngine } from './game/core/GameEngine';
 import { persistence, Persistence } from './game/systems/Persistence';
 import { audioSystem, AudioSystem } from './game/systems/AudioSystem';
@@ -18,7 +23,7 @@ import { ParticleContainer } from './components/containers/ParticleContainer';
 import { PlayerContainer } from './components/containers/PlayerContainer';
 import { Icons } from './components/ui/Icons';
 import { DialogueDisplay } from './components/ui/DialogueDisplay';
-
+import type { ChallengeModifier } from './game/config/ChallengeModifiers';
 import './styles/index.css';
 
 // Extend Window interface for game globals
@@ -30,7 +35,7 @@ declare global {
   }
 }
 
-type GameStateType = 'INTRO' | 'START' | 'PLAYING' | 'PAUSED' | 'GAMEOVER' | 'VICTORY' | 'SHOP' | 'ACHIEVEMENTS' | 'PILOTS' | 'CAMPAIGN';
+type GameStateType = 'INTRO' | 'START' | 'PLAYING' | 'PAUSED' | 'GAMEOVER' | 'VICTORY' | 'SHOP' | 'ACHIEVEMENTS' | 'PILOTS' | 'CAMPAIGN' | 'SETTINGS' | 'MATCHMAKING' | 'CHALLENGE';
 
 // Module-level flag for one-time initialization (avoids refs-during-render lint error)
 let persistenceLoaded = false;
@@ -58,7 +63,9 @@ function App() {
     shields: 0,
     wave: 1,
     weapon: 'BLASTER',
-    showWave: false
+    showWave: false,
+    opponentLives: undefined as number | undefined,
+    opponentShields: undefined as number | undefined
   });
   const [levelText, setLevelText] = useState({ show: false, wave: 1, sub: '', hint: '', isBoss: false });
   const [highScore, setHighScore] = useState(getInitialHighScore);
@@ -74,7 +81,9 @@ function App() {
     maxCombo: number;
   } | null>(null);
   const [currentCampaignLevel, setCurrentCampaignLevel] = useState<number>(0);
-  // Satisfy linter - these will be used when LevelCompleteScreen is added
+  const [showAuth, setShowAuth] = useState(false);
+
+  // Satisfy linter
   void campaignResult;
   void currentCampaignLevel;
 
@@ -147,6 +156,66 @@ function App() {
     audioSystem.playMusic('load');
   };
 
+  const handleOpenSettings = () => {
+    setPreviousState(gameState);
+    setGameState('SETTINGS');
+  };
+
+  const handleCloseSettings = () => {
+    setGameState(previousState);
+  };
+
+  const handleOpenProfile = () => {
+    setShowAuth(true);
+  };
+
+  const handleCloseProfile = () => {
+    setShowAuth(false);
+  };
+
+  const handleOpenMatchmaking = () => {
+    setGameState('MATCHMAKING');
+  };
+
+  const handleCloseMatchmaking = () => {
+    setGameState('START');
+    audioSystem.playMusic('load');
+  };
+
+  const handleStartMatchGame = () => {
+    setGameState('PLAYING');
+    // gameEngine.startGame() is NOT called primarily because startGame() resets everything.
+    // However, we DO need some initialization (lives, ship, etc).
+    // Let's modify gameEngine.startGame to accept a "skipParamsReset" or similar, 
+    // OR just manually call necessary init methods.
+    // Actually, it's safer to call startGame() and pass a flag to NOT reset the mode/bridge.
+
+    // gameEngine.gameMode is already set by MatchmakingScreen (VERSUS, COOP, or VS_PC)
+    // Only call startGame (which resets everything) if we are NOT in VS_PC mode
+    // (because startVsPC has already been called and done its own setup)
+    if (gameEngine.gameMode !== 'VS_PC') {
+      gameEngine.startGame();
+    }
+    audioSystem.playMusic('wave');
+  };
+
+  const handleOpenChallenge = () => {
+    setGameState('CHALLENGE');
+  };
+
+  const handleCloseChallenge = () => {
+    setGameState('START');
+    audioSystem.playMusic('load');
+  };
+
+  const handleStartChallenge = (modifiers: ChallengeModifier[]) => {
+    setGameState('PLAYING');
+    gameEngine.startGame(modifiers);
+    audioSystem.playMusic('wave');
+  };
+
+
+
   const handleStartCampaignLevel = (levelId: number) => {
     setCurrentCampaignLevel(levelId);
     setGameState('PLAYING');
@@ -180,6 +249,7 @@ function App() {
         setHighScore(hs);
         setIsNewHighScore(newHigh);
         persistence.trackStat('totalGamesPlayed', 1);
+        persistence.submitScore(gameEngine.score, gameEngine.wave);
       },
       onVictory: (score, hs) => {
         setGameState('VICTORY');
@@ -193,6 +263,12 @@ function App() {
         setCampaignResult({ levelId, stars, time, tookDamage, maxCombo });
         setGameState('VICTORY');  // Will show level complete screen
         persistence.trackStat('totalGamesPlayed', 1);
+        setCampaignResult({ levelId, stars, time, tookDamage, maxCombo });
+        setGameState('VICTORY');  // Will show level complete screen
+        persistence.trackStat('totalGamesPlayed', 1);
+      },
+      onOpponentUpdate: (lives, shields) => {
+        setHudState(prev => ({ ...prev, opponentLives: lives, opponentShields: shields }));
       }
     });
   };
@@ -217,6 +293,8 @@ function App() {
           shards={persistence.profile.shards}
           onPause={handlePause}
           showWave={hudState.showWave}
+          opponentLives={hudState.opponentLives}
+          opponentShields={hudState.opponentShields}
         />
       )}
 
@@ -227,6 +305,10 @@ function App() {
           onOpenAchievements={handleOpenAchievements}
           onOpenPilots={handleOpenPilots}
           onOpenCampaign={handleOpenCampaign}
+          onOpenChallenge={handleOpenChallenge}
+          onOpenSettings={handleOpenSettings}
+          onOpenProfile={handleOpenProfile}
+          onOpenMatchmaking={handleOpenMatchmaking}
           highScore={highScore}
         />
       )}
@@ -243,7 +325,15 @@ function App() {
       )}
 
       {gameState === 'PAUSED' && (
-        <PauseScreen onResume={handlePause} onOpenShop={handleOpenShop} />
+        <PauseScreen
+          onResume={handlePause}
+          onOpenShop={handleOpenShop}
+          onQuitToMenu={() => {
+            gameEngine.gameState = 'START';
+            setGameState('START');
+            audioSystem.playMusic('load');
+          }}
+        />
       )}
 
       {gameState === 'SHOP' && <ShopScreen onClose={handleCloseShop} />}
@@ -260,6 +350,22 @@ function App() {
         <CampaignScreen onClose={handleCloseCampaign} onStartLevel={handleStartCampaignLevel} />
       )}
 
+      {gameState === 'SETTINGS' && (
+        <SettingsScreen onClose={handleCloseSettings} />
+      )}
+
+      {gameState === 'MATCHMAKING' && (
+        <MatchmakingScreen onClose={handleCloseMatchmaking} onStartGame={handleStartMatchGame} />
+      )}
+
+      {gameState === 'CHALLENGE' && (
+        <ChallengeScreen onClose={handleCloseChallenge} onStart={handleStartChallenge} />
+      )}
+
+      {showAuth && (
+        <AuthScreen onClose={handleCloseProfile} />
+      )}
+
       {showDailyRewards && (
         <DailyRewardsPopup
           onClose={() => setShowDailyRewards(false)}
@@ -267,19 +373,14 @@ function App() {
         />
       )}
 
-      {/* Pilot Dialogue Display */}
       <DialogueDisplay />
-
-      {/* Tutorial Layer */}
       <div id="tutorial-layer"></div>
-
-      {/* Level Overlay */}
       <div id="level-screen" className={`${levelText.show ? 'show-level' : ''} ${levelText.isBoss ? 'boss-alert-bg' : ''}`}>
-        <div id="level-title" className="cyan-glow" style={{ color: levelText.isBoss ? '#f00' : '#0ff' }}>
-          {levelText.isBoss ? 'WARNING' : `WAVE ${levelText.wave}`}
+        <div id="level-title" className="cyan-glow" style={{ color: levelText.isBoss ? '#f00' : '#0ff', fontSize: (levelText.sub === 'GET READY' || levelText.sub === 'GO!') ? '120px' : '60px' }}>
+          {(levelText.sub === 'GET READY' || levelText.sub === 'GO!') ? levelText.hint || levelText.sub : (levelText.isBoss ? 'WARNING' : `WAVE ${levelText.wave}`)}
         </div>
         <div id="level-sub" style={{ fontSize: '20px', color: '#fff', marginTop: '10px', textTransform: 'uppercase', letterSpacing: '2px' }}>
-          {levelText.sub}
+          {(levelText.sub === 'GET READY' || levelText.sub === 'GO!') && levelText.sub !== levelText.hint ? levelText.sub : levelText.sub}
         </div>
         <div id="level-hint" style={{ fontSize: '14px', color: '#aaa', marginTop: '20px', fontStyle: 'italic' }}>
           {levelText.hint}

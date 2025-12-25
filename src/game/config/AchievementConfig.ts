@@ -1,6 +1,8 @@
 // Achievement System
 // Tracks player accomplishments with rewards
 
+import { ICONS } from './Icons';
+
 export type AchievementCategory = 'combat' | 'progression' | 'mastery' | 'collection' | 'special';
 
 export interface Achievement {
@@ -9,6 +11,7 @@ export interface Achievement {
     description: string;
     category: AchievementCategory;
     icon: string;  // Emoji
+    steamId?: string; // Steam Achievement API name
     tiers: {
         target: number;
         reward: number;  // Shards
@@ -24,7 +27,7 @@ export const ACHIEVEMENTS: Achievement[] = [
         name: 'Asteroid Destroyer',
         description: 'Destroy asteroids',
         category: 'combat',
-        icon: '☄️',
+        icon: ICONS.Game.Asteroid,
         tiers: [
             { target: 100, reward: 50 },
             { target: 500, reward: 150 },
@@ -36,7 +39,7 @@ export const ACHIEVEMENTS: Achievement[] = [
         name: 'Boss Slayer',
         description: 'Defeat bosses',
         category: 'combat',
-        icon: '👹',
+        icon: ICONS.Game.Boss,
         tiers: [
             { target: 5, reward: 100 },
             { target: 25, reward: 300 },
@@ -48,7 +51,7 @@ export const ACHIEVEMENTS: Achievement[] = [
         name: 'Combo Master',
         description: 'Reach combo level',
         category: 'combat',
-        icon: '🔥',
+        icon: ICONS.Game.Fire,
         tiers: [
             { target: 10, reward: 75 },
             { target: 25, reward: 200 },
@@ -60,7 +63,7 @@ export const ACHIEVEMENTS: Achievement[] = [
         name: 'Bullet Hell',
         description: 'Fire bullets',
         category: 'combat',
-        icon: '💥',
+        icon: ICONS.Game.Damage,
         tiers: [
             { target: 1000, reward: 50 },
             { target: 10000, reward: 200 },
@@ -74,7 +77,7 @@ export const ACHIEVEMENTS: Achievement[] = [
         name: 'Wave Survivor',
         description: 'Reach wave',
         category: 'progression',
-        icon: '🌊',
+        icon: ICONS.Game.Wave,
         tiers: [
             { target: 5, reward: 50 },
             { target: 10, reward: 150 },
@@ -86,7 +89,7 @@ export const ACHIEVEMENTS: Achievement[] = [
         name: 'High Scorer',
         description: 'Achieve score',
         category: 'progression',
-        icon: '🏆',
+        icon: ICONS.Menu.Awards,
         tiers: [
             { target: 10000, reward: 100 },
             { target: 50000, reward: 300 },
@@ -98,7 +101,7 @@ export const ACHIEVEMENTS: Achievement[] = [
         name: 'Dedicated Pilot',
         description: 'Complete games',
         category: 'progression',
-        icon: '🎮',
+        icon: ICONS.Game.Controller,
         tiers: [
             { target: 10, reward: 50 },
             { target: 50, reward: 200 },
@@ -112,7 +115,7 @@ export const ACHIEVEMENTS: Achievement[] = [
         name: 'Untouchable',
         description: 'Complete waves without taking damage',
         category: 'mastery',
-        icon: '✨',
+        icon: ICONS.Game.Sparkle,
         tiers: [
             { target: 3, reward: 100 },
             { target: 10, reward: 400 },
@@ -124,7 +127,7 @@ export const ACHIEVEMENTS: Achievement[] = [
         name: 'Speed Demon',
         description: 'Complete boss in under 30 seconds',
         category: 'mastery',
-        icon: '⚡',
+        icon: ICONS.Game.Lightning,
         tiers: [
             { target: 1, reward: 150 },
             { target: 5, reward: 500 },
@@ -138,7 +141,7 @@ export const ACHIEVEMENTS: Achievement[] = [
         name: 'Shard Collector',
         description: 'Collect total shards',
         category: 'collection',
-        icon: '💎',
+        icon: ICONS.Currency.Shard,
         tiers: [
             { target: 1000, reward: 100 },
             { target: 10000, reward: 500 },
@@ -150,7 +153,7 @@ export const ACHIEVEMENTS: Achievement[] = [
         name: 'Power-Up Hunter',
         description: 'Collect power-ups',
         category: 'collection',
-        icon: '⬆️',
+        icon: ICONS.Game.Powerup,
         tiers: [
             { target: 50, reward: 75 },
             { target: 250, reward: 300 },
@@ -164,7 +167,7 @@ export const ACHIEVEMENTS: Achievement[] = [
         name: 'First Blood',
         description: 'Destroy your first asteroid',
         category: 'special',
-        icon: '🎯',
+        icon: ICONS.Game.Target,
         tiers: [{ target: 1, reward: 25 }]
     },
     {
@@ -172,7 +175,7 @@ export const ACHIEVEMENTS: Achievement[] = [
         name: 'Mothership Slayer',
         description: 'Defeat the Mothership (Wave 20)',
         category: 'special',
-        icon: '🚀',
+        icon: ICONS.Game.Rocket,
         tiers: [{ target: 1, reward: 1000, title: 'Mothership Hunter' }]
     },
     {
@@ -180,7 +183,7 @@ export const ACHIEVEMENTS: Achievement[] = [
         name: 'Daily Dedication',
         description: 'Claim daily rewards for 7 consecutive days',
         category: 'special',
-        icon: '📅',
+        icon: ICONS.Menu.Calendar,
         tiers: [{ target: 1, reward: 500, title: 'Daily Hero' }]
     },
     {
@@ -188,7 +191,7 @@ export const ACHIEVEMENTS: Achievement[] = [
         name: 'Boss Rush',
         description: 'Defeat all unique boss types',
         category: 'special',
-        icon: '👑',
+        icon: ICONS.Game.Crown,
         hidden: true,
         tiers: [{ target: 7, reward: 2000, title: 'Boss Conqueror' }]
     }
